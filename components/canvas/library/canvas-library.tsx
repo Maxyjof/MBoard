@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PenLine, Plus, Search, X } from "lucide-react";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { schedulePreloadExcalidraw } from "@/components/canvas/preload";
 import type { CanvasSummary } from "@/lib/types";
 import { CanvasCard } from "./canvas-card";
 import { CanvasFormDialog } from "./canvas-form-dialog";
@@ -27,6 +28,11 @@ export function CanvasLibrary({ initialCanvases }: CanvasLibraryProps) {
 
   const canvases = initialCanvases;
   const keyword = query.trim().toLowerCase();
+
+  // 进入画板库后空闲时预下载画布引擎，点开画板更快
+  useEffect(() => {
+    schedulePreloadExcalidraw();
+  }, []);
 
   // 前端即时过滤，数据量不大无需请求服务端
   const filtered = useMemo(() => {

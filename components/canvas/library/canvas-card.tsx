@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Dropdown, MenuDivider, MenuItem } from "@/components/ui/dropdown";
+import { preloadExcalidraw } from "@/components/canvas/preload";
 import { relativeTime } from "@/lib/utils";
 import type { CanvasSummary } from "@/lib/types";
 
@@ -34,6 +35,9 @@ export function CanvasCard({ canvas, onRename, onDelete, onCopyLink }: CanvasCar
         href={`/canvas/${canvas.id}`}
         className="block rounded-2xl focus-visible:outline-none"
         aria-label={`打开画板 ${canvas.title}`}
+        onMouseEnter={preloadExcalidraw}
+        onFocus={preloadExcalidraw}
+        onTouchStart={preloadExcalidraw}
       >
         <div className="relative aspect-[16/10] overflow-hidden border-b border-line bg-surface-2">
           {canvas.thumbnailUrl ? (
