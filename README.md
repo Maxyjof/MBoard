@@ -93,6 +93,8 @@ npm run dev                # http://localhost:3000
 
 > PowerShell 默认禁止运行 `npm.ps1` 时，用 `cmd /c "npm.cmd run dev"`。
 
+> 开发模式首次访问某个路由会按需编译（可能几秒），启动 dev 后可另开终端执行 `npm run warm` 预先编译主要页面；生产构建没有这个等待。
+
 ## Docker 部署
 
 ```bash
@@ -145,7 +147,8 @@ npm run hash -- "你的新密码"
 | 命令 | 说明 |
 | --- | --- |
 | `npm run dev` | 开发模式（Next + 协作 WebSocket，同端口） |
-| `npm run build` / `npm start` | 生产构建 / 启动 |
+| `npm run warm` | 开发态预热：启动 dev 后另开终端执行，提前编译主要路由 |
+| `npm run build` / `npm start` | 生产构建 / 启动（生产无按需编译） |
 | `npm run setup` | 生成 Client、建表、种子数据 |
 | `npm run typecheck` | TypeScript 全量检查 |
 | `npm run db:seed` | 手动补种子数据（幂等） |
