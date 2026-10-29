@@ -37,6 +37,7 @@ export type CardDTO = {
   title: string;
   descriptionMd: string;
   labels: CardLabel[];
+  assignees: string[];
   dueDate: string | null;
   archived: boolean;
   sort: number;
@@ -44,6 +45,13 @@ export type CardDTO = {
   attachments: AttachmentDTO[];
   createdAt: string;
   updatedAt: string;
+};
+
+/// 可被分配为负责人的成员（配置文件账号 + 个人显示名覆盖）
+export type MemberDTO = {
+  username: string;
+  displayName: string;
+  color: string;
 };
 
 export type ListDTO = {

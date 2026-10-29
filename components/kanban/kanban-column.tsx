@@ -14,10 +14,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { CardItem } from "@/components/kanban/card-item";
 import { createCard, deleteList, errorMessage, updateList } from "@/components/kanban/kanban-api";
 import { cn } from "@/lib/utils";
-import type { CardDTO, ListDTO } from "@/lib/types";
+import type { CardDTO, ListDTO, MemberDTO } from "@/lib/types";
 
 type KanbanColumnProps = {
   list: ListDTO;
+  members: MemberDTO[];
   onOpenCard: (card: CardDTO) => void;
   onCardCreated: (card: CardDTO) => void;
   onListRenamed: (listId: string, title: string) => void;
@@ -27,6 +28,7 @@ type KanbanColumnProps = {
 
 export function KanbanColumn({
   list,
+  members,
   onOpenCard,
   onCardCreated,
   onListRenamed,
@@ -223,6 +225,7 @@ export function KanbanColumn({
                   key={card.id}
                   card={card}
                   listId={list.id}
+                  members={members}
                   disabled={disabled}
                   onOpen={() => onOpenCard(card)}
                 />

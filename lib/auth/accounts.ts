@@ -85,6 +85,11 @@ export function getAccount(username: string): Account | null {
   return loadAccounts().find((item) => item.username === username) ?? null;
 }
 
+// 列出全部配置账号（用于负责人选择、成员列表）
+export function listAccounts(): Account[] {
+  return loadAccounts();
+}
+
 // 校验配置文件里的初始密码
 export async function verifyAccountPassword(account: Account, password: string): Promise<boolean> {
   return account.passwordHash

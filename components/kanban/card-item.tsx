@@ -4,18 +4,20 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { AlignLeft, CalendarDays, Paperclip } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 import { labelStyle } from "@/lib/kanban";
 import { cn, formatDate, isOverdue } from "@/lib/utils";
-import type { CardDTO } from "@/lib/types";
+import type { CardDTO, MemberDTO } from "@/lib/types";
 
 type CardItemProps = {
   card: CardDTO;
   listId: string;
+  members: MemberDTO[];
   onOpen: () => void;
   disabled?: boolean;
 };
 
-export function CardItem({ card, listId, onOpen, disabled = false }: CardItemProps) {
+export function CardItem({ card, listId, members, onOpen, disabled = false }: CardItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: "card", listId },
@@ -24,6 +26,9 @@ export function CardItem({ card, listId, onOpen, disabled = false }: CardItemPro
 
   const overdue = isOverdue(card.dueDate);
   const hasDescription = card.descriptionMd.trim().length > 0;
+  const assigneeMembers = card.assignees
+    .map((username) => members.find((member) => member.username === username))
+    .filter((member): member is MemberDTO => Boolean(member));
 
   return (
     <div
@@ -57,7 +62,27 @@ export function CardItem({ card, listId, onOpen, disabled = false }: CardItemPro
         </div>
       ) : null}
 
-      <p className="break-words text-[13px] font-medium leading-5 text-ink">{card.title}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="break-words text-[13px] font-medium leading-5 text-ink">{card.title}</p>
+        {assigneeMembers.length > 0 ? (
+          <div className="flex shrink-0 items-center pt-0.5 -space-x-1.5">
+            {assigneeMembers.slice(0, 3).map((member) => (
+              <Avatar
+                key={member.username}
+                name={member.displayName}
+                color={member.color}
+                size={20}
+                ring
+              />
+            ))}
+            {assigneeMembers.length > 3 ? (
+              <span className="flex h-5 items-center rounded-full border border-line bg-surface-2 px-1.5 text-[9.5px] font-medium text-muted">
+                +{assigneeMembers.length - 3}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       {overdue || hasDescription || card.attachments.length > 0 ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-faint">

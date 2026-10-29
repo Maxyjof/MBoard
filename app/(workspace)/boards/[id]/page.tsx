@@ -2,10 +2,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { listMembers } from "@/lib/members";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { toBoardDetail, toListDTO } from "@/lib/kanban";
 
-type BoardPageProps = { params: Promise<{ id: string }> };
+type BoardPageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ card?: string }>;
+};
 
 export async function generateMetadata({ params }: BoardPageProps): Promise<Metadata> {
   const { id } = await params;
@@ -13,31 +17,42 @@ export async function generateMetadata({ params }: BoardPageProps): Promise<Meta
   return { title: board?.title ?? "看板" };
 }
 
-export default async function BoardDetailPage({ params }: BoardPageProps) {
+export default async function BoardDetailPage({ params, searchParams }: BoardPageProps) {
   const { id } = await params;
+  const { card } = await searchParams;
 
-  const board = await prisma.board.findUnique({
-    where: { id },
-    include: {
-      lists: {
-        orderBy: { sort: "asc" },
-        include: {
-          cards: {
-            where: { archived: false },
-            orderBy: { sort: "asc" },
-            include: {
-              attachments: {
-                orderBy: { createdAt: "asc" },
-                include: { asset: true },
+  const [board, members] = await Promise.all([
+    prisma.board.findUnique({
+      where: { id },
+      include: {
+        lists: {
+          orderBy: { sort: "asc" },
+          include: {
+            cards: {
+              where: { archived: false },
+              orderBy: { sort: "asc" },
+              include: {
+                attachments: {
+                  orderBy: { createdAt: "asc" },
+                  include: { asset: true },
+                },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    listMembers(),
+  ]);
 
   if (!board) notFound();
 
-  return <KanbanBoard initialBoard={toBoardDetail(board)} initialLists={board.lists.map(toListDTO)} />;
+  return (
+    <KanbanBoard
+      initialBoard={toBoardDetail(board)}
+      initialLists={board.lists.map(toListDTO)}
+      members={members}
+      initialCardId={card ?? null}
+    />
+  );
 }

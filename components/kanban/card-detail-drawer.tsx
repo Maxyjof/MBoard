@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { AssigneePicker } from "@/components/kanban/assignee-picker";
 import { AttachmentList } from "@/components/kanban/attachment-list";
 import { LabelPicker } from "@/components/kanban/label-picker";
 import { MarkdownView } from "@/components/kanban/markdown-view";
@@ -26,10 +28,11 @@ import {
   type CardPatch,
 } from "@/components/kanban/kanban-api";
 import { cn, formatDate, relativeTime } from "@/lib/utils";
-import type { CardDTO, CardLabel } from "@/lib/types";
+import type { CardDTO, CardLabel, MemberDTO } from "@/lib/types";
 
 type CardDetailDrawerProps = {
   card: CardDTO | null;
+  members: MemberDTO[];
   onClose: () => void;
   onUpdated: (card: CardDTO) => void;
   onRemoved: (cardId: string) => void;
@@ -46,6 +49,7 @@ function toDateInput(iso: string | null): string {
 
 export function CardDetailDrawer({
   card,
+  members,
   onClose,
   onUpdated,
   onRemoved,
@@ -136,6 +140,19 @@ export function CardDetailDrawer({
     });
   }
 
+  function handleAssignees(next: string[]) {
+    if (!card || busy) return;
+    const previous = card;
+    onUpdated({ ...card, assignees: next });
+    void patchCard(
+      { assignees: next },
+      "assignees",
+      next.length > 0 ? "负责人已更新" : "已清空负责人"
+    ).then((ok) => {
+      if (!ok) onUpdated(previous);
+    });
+  }
+
   function handleDueDate(value: string) {
     if (!card || busy) return;
     const previous = card;
@@ -219,6 +236,22 @@ export function CardDetailDrawer({
               onChange={handleLabels}
               disabled={busy}
             />
+          </section>
+
+          <section>
+            <h3 className="mb-2 flex items-center gap-1.5 text-[12.5px] font-medium text-muted">
+              <Users className="h-3.5 w-3.5" />
+              负责人
+            </h3>
+            <AssigneePicker
+              members={members}
+              selected={card.assignees}
+              onChange={handleAssignees}
+              disabled={busy}
+            />
+            <p className="mt-1.5 text-[11px] text-faint">
+              被分配的人可以在「我的任务」里看到这张卡片，支持多人协作
+            </p>
           </section>
 
           <section>

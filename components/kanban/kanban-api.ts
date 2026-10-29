@@ -15,6 +15,7 @@ export type CardPatch = {
   title?: string;
   descriptionMd?: string;
   labels?: CardLabel[];
+  assignees?: string[];
   dueDate?: string | null;
   archived?: boolean;
   coverAssetId?: string | null;

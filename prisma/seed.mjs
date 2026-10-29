@@ -253,12 +253,14 @@ async function main() {
                     descriptionMd:
                       "支持上传 `.md` 文件，在画布中生成文档卡片，点击可预览渲染结果。\n\n- 支持 GFM 表格\n- 支持代码块",
                     labels: JSON.stringify([{ name: "功能", color: "#6353f5" }]),
+                    assignees: JSON.stringify(["maxy"]),
                     sort: 0,
                   },
                   {
                     title: "看板卡片支持附件上传",
                     descriptionMd: "图片、PDF、Markdown 都可以作为卡片附件。",
                     labels: JSON.stringify([{ name: "增强", color: "#0ea5e9" }]),
+                    assignees: JSON.stringify(["tannami", "tomato"]),
                     sort: 1,
                   },
                 ],
@@ -273,6 +275,7 @@ async function main() {
                     title: "多人实时协作光标",
                     descriptionMd: "基于 Yjs + WebSocket，展示在线成员与实时光标。",
                     labels: JSON.stringify([{ name: "核心", color: "#f59e0b" }]),
+                    assignees: JSON.stringify(["maxy", "fashi"]),
                     sort: 0,
                   },
                 ],
@@ -287,6 +290,7 @@ async function main() {
                     title: "配置文件账号登录",
                     descriptionMd: "账号写在 `config/accounts.yml`，登录后共享所有数据。",
                     labels: JSON.stringify([{ name: "基础", color: "#10b981" }]),
+                    assignees: JSON.stringify(["maxy"]),
                     sort: 0,
                   },
                 ],
@@ -310,15 +314,31 @@ async function main() {
               sort: 0,
               cards: {
                 create: [
-                  { title: "完成需求梳理", sort: 0 },
-                  { title: "画系统架构图", sort: 1 },
+                  {
+                    title: "完成需求梳理",
+                    sort: 0,
+                    assignees: JSON.stringify(["tannami"]),
+                  },
+                  {
+                    title: "画系统架构图",
+                    sort: 1,
+                    assignees: JSON.stringify(["fashi"]),
+                  },
                 ],
               },
             },
             {
               title: "下周",
               sort: 1,
-              cards: { create: [{ title: "联调实时协作", sort: 0 }] },
+              cards: {
+                create: [
+                  {
+                    title: "联调实时协作",
+                    sort: 0,
+                    assignees: JSON.stringify(["tomato"]),
+                  },
+                ],
+              },
             },
           ],
         },

@@ -1,8 +1,14 @@
 // 单张卡片：更新（标题/描述/标签/截止日期/归档/封面）、删除
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
+import { getAccount } from "@/lib/auth/accounts";
 import { ok, fail, notFound, serverError, unauthorized } from "@/lib/http";
-import { cleanText, normalizeLabels, toCardDTO } from "@/lib/kanban";
+import {
+  cleanText,
+  normalizeAssignees,
+  normalizeLabels,
+  toCardDTO,
+} from "@/lib/kanban";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -10,6 +16,7 @@ type CardUpdateData = {
   title?: string;
   descriptionMd?: string;
   labels?: string;
+  assignees?: string;
   dueDate?: Date | null;
   archived?: boolean;
   coverAssetId?: string | null;
@@ -42,6 +49,15 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const labels = normalizeLabels(payload.labels);
     if (!labels) return fail("标签格式不正确");
     data.labels = JSON.stringify(labels);
+  }
+  if ("assignees" in payload) {
+    const assignees = normalizeAssignees(payload.assignees);
+    if (!assignees) return fail("负责人格式不正确");
+
+    const unknown = assignees.filter((username) => !getAccount(username));
+    if (unknown.length > 0) return fail(`负责人不存在：${unknown.join("、")}`);
+
+    data.assignees = JSON.stringify(assignees);
   }
   if ("dueDate" in payload) {
     if (payload.dueDate === null || payload.dueDate === "") {

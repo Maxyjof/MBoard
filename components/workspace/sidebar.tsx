@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronRight,
   LayoutGrid,
+  ListTodo,
   LogOut,
   Moon,
   PanelLeftClose,
@@ -28,6 +29,7 @@ import { CreateBoardDialog } from "@/components/workspace/create-board-dialog";
 type SidebarProps = {
   user: AppUser;
   boards: BoardSummary[];
+  myTaskCount: number;
   collapsed: boolean;
   onToggleCollapse: () => void;
   onNavigate?: () => void;
@@ -40,6 +42,7 @@ type SidebarProps = {
 export function Sidebar({
   user,
   boards,
+  myTaskCount,
   collapsed,
   onToggleCollapse,
   onNavigate,
@@ -53,6 +56,7 @@ export function Sidebar({
 
   const isBoards = pathname.startsWith("/boards");
   const isCanvases = pathname.startsWith("/canvases");
+  const isMyTasks = pathname.startsWith("/my-tasks");
 
   return (
     <>
@@ -109,6 +113,15 @@ export function Sidebar({
             label="看板"
             active={isBoards}
             collapsed={collapsed && !mobile}
+            onClick={onNavigate}
+          />
+          <NavItem
+            href="/my-tasks"
+            icon={<ListTodo className="h-4 w-4" />}
+            label="我的任务"
+            active={isMyTasks}
+            collapsed={collapsed && !mobile}
+            badge={myTaskCount}
             onClick={onNavigate}
           />
           <NavItem
@@ -207,6 +220,7 @@ function NavItem({
   label,
   active,
   collapsed,
+  badge,
   onClick,
 }: {
   href: string;
@@ -214,6 +228,7 @@ function NavItem({
   label: string;
   active: boolean;
   collapsed: boolean;
+  badge?: number;
   onClick?: () => void;
 }) {
   const content = (
@@ -228,7 +243,13 @@ function NavItem({
     >
       {icon}
       {!collapsed ? <span className="truncate">{label}</span> : null}
-      {!collapsed && active ? <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" /> : null}
+      {!collapsed && badge && badge > 0 ? (
+        <span className="ml-auto rounded-full bg-brand/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-brand">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : !collapsed && active ? (
+        <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" />
+      ) : null}
     </Link>
   );
 

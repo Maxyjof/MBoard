@@ -40,20 +40,27 @@ import {
 } from "@/components/kanban/board-state";
 import { buildReorderPayload, labelStyle, type ReorderPayload } from "@/lib/kanban";
 import { cn } from "@/lib/utils";
-import type { BoardDetail, CardDTO, ListDTO } from "@/lib/types";
+import type { BoardDetail, CardDTO, ListDTO, MemberDTO } from "@/lib/types";
 
 type KanbanBoardProps = {
   initialBoard: BoardDetail;
   initialLists: ListDTO[];
+  members: MemberDTO[];
+  initialCardId?: string | null;
 };
 
 type DragTarget = { type: "list" | "card"; id: string };
 
-export function KanbanBoard({ initialBoard, initialLists }: KanbanBoardProps) {
+export function KanbanBoard({
+  initialBoard,
+  initialLists,
+  members,
+  initialCardId = null,
+}: KanbanBoardProps) {
   const [board, setBoard] = useState(initialBoard);
   const [lists, setLists] = useState(initialLists);
   const [activeDrag, setActiveDrag] = useState<DragTarget | null>(null);
-  const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [openCardId, setOpenCardId] = useState<string | null>(initialCardId);
   const [savingOrder, setSavingOrder] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -257,6 +264,7 @@ export function KanbanBoard({ initialBoard, initialLists }: KanbanBoardProps) {
       />
 
       <DndContext
+        id="kanban-board"
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
@@ -289,6 +297,7 @@ export function KanbanBoard({ initialBoard, initialLists }: KanbanBoardProps) {
                   <KanbanColumn
                     key={list.id}
                     list={list}
+                    members={members}
                     disabled={savingOrder}
                     onOpenCard={handleOpenCard}
                     onCardCreated={(card) => setLists((previous) => appendCard(previous, list.id, card))}
@@ -346,6 +355,7 @@ export function KanbanBoard({ initialBoard, initialLists }: KanbanBoardProps) {
 
       <CardDetailDrawer
         card={openCard}
+        members={members}
         onClose={closeDrawer}
         onUpdated={handleCardUpdated}
         onRemoved={handleCardRemoved}

@@ -46,6 +46,7 @@ model BoardCard {
   title         String
   descriptionMd String           @default("")
   labels        String           @default("[]")
+  assignees     String           @default("[]")
   dueDate       DateTime?
   archived      Boolean          @default(false)
   sort          Int              @default(0)

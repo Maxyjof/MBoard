@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { parseAssignees } from "@/lib/kanban";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import type { BoardSummary } from "@/lib/types";
 
@@ -9,22 +10,32 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const boards = await prisma.board.findMany({
-    orderBy: [{ sort: "asc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      accent: true,
-      updatedAt: true,
-      _count: { select: { lists: true } },
-      lists: {
-        select: {
-          _count: { select: { cards: { where: { archived: false } } } },
+  const [boards, activeCards] = await Promise.all([
+    prisma.board.findMany({
+      orderBy: [{ sort: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        accent: true,
+        updatedAt: true,
+        _count: { select: { lists: true } },
+        lists: {
+          select: {
+            _count: { select: { cards: { where: { archived: false } } } },
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.boardCard.findMany({
+      where: { archived: false },
+      select: { assignees: true },
+    }),
+  ]);
+
+  const myTaskCount = activeCards.filter((card) =>
+    parseAssignees(card.assignees).includes(session.username)
+  ).length;
 
   const summaries: BoardSummary[] = boards.map((board) => ({
     id: board.id,
@@ -37,7 +48,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   }));
 
   return (
-    <WorkspaceShell user={session} boards={summaries}>
+    <WorkspaceShell user={session} boards={summaries} myTaskCount={myTaskCount}>
       {children}
     </WorkspaceShell>
   );

@@ -10,6 +10,9 @@ import type {
   ListDTO,
 } from "@/lib/types";
 
+/// 单张卡片最多负责人数
+export const MAX_ASSIGNEES = 10;
+
 /// 看板主题色预设
 export const ACCENT_PRESETS = [
   "#6353f5",
@@ -67,6 +70,7 @@ export type CardRecord = {
   title: string;
   descriptionMd: string;
   labels: string;
+  assignees: string;
   dueDate: Date | null;
   archived: boolean;
   sort: number;
@@ -158,6 +162,47 @@ export function labelStyle(color: string): React.CSSProperties {
   };
 }
 
+// 存库的负责人是用户名 JSON 数组，解析失败时降级为空数组
+export function parseAssignees(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const seen = new Set<string>();
+    const usernames: string[] = [];
+    for (const item of parsed) {
+      if (typeof item !== "string") continue;
+      const username = item.trim();
+      if (!username || seen.has(username)) continue;
+      seen.add(username);
+      usernames.push(username);
+      if (usernames.length >= MAX_ASSIGNEES) break;
+    }
+    return usernames;
+  } catch {
+    return [];
+  }
+}
+
+// 校验并规范化请求里的负责人，结构非法时返回 null（账号是否存在由接口层校验）
+export function normalizeAssignees(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const seen = new Set<string>();
+  const usernames: string[] = [];
+
+  for (const item of value) {
+    if (typeof item !== "string") return null;
+    const username = item.trim();
+    if (!username) continue;
+    if (seen.has(username)) continue;
+    seen.add(username);
+    usernames.push(username.slice(0, 64));
+    if (usernames.length >= MAX_ASSIGNEES) break;
+  }
+
+  return usernames;
+}
+
 export function toAttachmentDTO(record: AttachmentRecord): AttachmentDTO {
   return {
     id: record.id,
@@ -176,6 +221,7 @@ export function toCardDTO(card: CardRecord): CardDTO {
     title: card.title,
     descriptionMd: card.descriptionMd,
     labels: parseLabels(card.labels),
+    assignees: parseAssignees(card.assignees),
     dueDate: card.dueDate ? card.dueDate.toISOString() : null,
     archived: card.archived,
     sort: card.sort,
