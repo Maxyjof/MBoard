@@ -8,6 +8,8 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 
 const base = process.env.BASE_URL || "http://127.0.0.1:3000";
+const loginUser = process.env.MB_USER || "maxy";
+const loginPass = process.env.MB_PASS || "123456";
 const canvasId = process.argv[2];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -19,7 +21,7 @@ if (!canvasId) {
 const loginResponse = await fetch(`${base}/api/auth/login`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ username: "admin", password: "admin123" }),
+  body: JSON.stringify({ username: loginUser, password: loginPass }),
 });
 const cookie = loginResponse.headers.get("set-cookie")?.split(";")[0];
 if (!cookie) {

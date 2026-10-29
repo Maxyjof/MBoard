@@ -8,8 +8,10 @@
 
 ### 账号与访问
 - 账号预置在 `config/accounts.yml`，支持明文密码或 bcrypt 哈希
+- 默认 4 个账号：maxy / tannami / fashi / tomato，密码均为 `123456`
 - JWT + HttpOnly Cookie 会话，中间件统一拦截未登录请求
 - 登录用户权限平等，所有看板、画板、文档、附件全局共享
+- **账号设置**：左下角头像菜单进入，可修改自己的显示名和登录密码
 - 深浅色主题、响应式布局
 
 ### 看板（Trello 式）
@@ -31,9 +33,11 @@
 
 ### 实时协作
 - 画布基于 **Yjs CRDT + WebSocket**，多人同时编辑自动合并，不会互相覆盖
-- 在线成员头像、实时光标、选区高亮、断线重连
+- 在线成员头像、**带名字的实时光标**、选区高亮、断线重连
 - 服务端增量持久化到 SQLite，空闲房间自动卸载
 - 画布缩略图由客户端定时导出并上传，画板库实时可见
+
+![多人协作光标](docs/screenshots/cursor.png)
 
 | 看板（深色） | 画布（深色） |
 | --- | --- |
@@ -71,9 +75,10 @@ npm run dev                # http://localhost:3000
 
 | 用户名 | 密码 | 显示名 |
 | --- | --- | --- |
-| admin | admin123 | 管理员 |
-| maxy | maxy123 | Maxy |
-| guest | guest123 | 访客 |
+| maxy | 123456 | Maxy |
+| tannami | 123456 | Tannami |
+| fashi | 123456 | Fashi |
+| tomato | 123456 | Tomato |
 
 > PowerShell 默认禁止运行 `npm.ps1` 时，用 `cmd /c "npm.cmd run dev"`。
 
@@ -94,13 +99,15 @@ docker compose up -d --build
 
 ## 账号配置
 
+账号白名单写在 `config/accounts.yml`，登录后可以在「账号设置」里改显示名和密码。
+
 ```yaml
 # config/accounts.yml
 users:
-  - username: admin
+  - username: maxy
     passwordHash: "$2b$10$..."   # 推荐：bcrypt 哈希
-    displayName: "管理员"
-    color: "#6353f5"             # 协作光标 / 头像底色
+    displayName: "Maxy"
+    color: "#6353f5"             # 头像底色（光标颜色由画布按用户分配）
 ```
 
 生成哈希：
@@ -110,6 +117,17 @@ npm run hash -- "你的新密码"
 ```
 
 修改配置后重启服务生效；新增 / 删除账号只改文件，不需要数据库。
+
+## 账号设置
+
+登录后点击左下角头像 → **账号设置**：
+
+- **修改显示名**：会显示在画布协作光标、在线成员列表和头像上；保存后刷新画布即可看到新名字
+- **修改密码**：需要输入当前密码，新密码至少 6 位；修改结果写入数据库，覆盖配置文件里的初始密码，当前登录状态不受影响
+- 配置文件仍是账号白名单：删除账号后，即使数据库里还有个人设置也无法登录
+
+![账号设置](docs/screenshots/settings.png)
+
 
 ## 常用脚本
 
@@ -169,5 +187,6 @@ MBoard/
 ```bash
 node scripts/collab-test.mjs <canvasId>          # 协议层双端同步测试
 node scripts/collab-e2e.mjs <canvasId>           # 双标签页真实协作（仅开发模式）
+node scripts/cursor-e2e.mjs <canvasId>           # 双账号光标与用户名验证（仅开发模式）
 node scripts/browser-check.mjs /boards board.png # 无头浏览器截图 + 控制台检查
 ```

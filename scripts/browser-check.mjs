@@ -23,6 +23,8 @@ const outputPath = process.argv[3] || path.join(process.cwd(), "data", "shot.png
 const skipLogin = process.argv.includes("--no-login");
 const waitMs = Number(process.argv.find((arg) => arg.startsWith("--wait="))?.split("=")[1] || 9000);
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000";
+const loginUser = process.env.MB_USER || "maxy";
+const loginPass = process.env.MB_PASS || "123456";
 const port = 9333;
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mb-chrome-"));
 
@@ -143,7 +145,7 @@ try {
   if (!skipLogin) {
     // 通过页面内 fetch 登录，拿到 HttpOnly Cookie
     const login = await cdp.send("Runtime.evaluate", {
-      expression: `fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'admin',password:'admin123'})}).then(r=>r.status)`,
+      expression: `fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:${JSON.stringify(loginUser)},password:${JSON.stringify(loginPass)}})}).then(r=>r.status)`,
       awaitPromise: true,
       returnByValue: true,
     });

@@ -17,6 +17,8 @@ if (!CHROME) {
 
 const canvasId = process.argv[2];
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000";
+const loginUser = process.env.MB_USER || "maxy";
+const loginPass = process.env.MB_PASS || "123456";
 const debugPort = 9334;
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "mb-e2e-"));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -134,7 +136,7 @@ try {
   }
   await sleep(800);
   const status = await loginTab.cdp.evaluate(
-    `fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'admin',password:'admin123'})}).then(r=>r.status)`
+    `fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:${JSON.stringify(loginUser)},password:${JSON.stringify(loginPass)}})}).then(r=>r.status)`
   );
   check("login", status === 200, `status=${status}`);
   await fetch(`http://127.0.0.1:${debugPort}/json/close/${loginTab.targetId}`);

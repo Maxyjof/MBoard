@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth/token";
+import { clearSessionCookie } from "@/lib/auth/cookie";
 
 export async function POST() {
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.COOKIE_SECURE === "true",
-    path: "/",
-    maxAge: 0,
-  });
+  clearSessionCookie(response);
   return response;
 }

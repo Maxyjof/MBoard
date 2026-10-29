@@ -83,6 +83,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
   const pendingPointerRef = useRef<any>(null);
   const selectionTimerRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const collabSyncTimerRef = useRef<number | null>(null);
   const readyRef = useRef(false);
   const apiMountedRef = useRef(false);
 
@@ -177,11 +178,13 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       if (!info?.name) return;
 
       map.set(String(clientId), {
+        // Excalidraw 用 id 的哈希生成稳定的光标颜色
+        id: info.username,
         pointer: (state as any).pointer ?? undefined,
         button: (state as any).button === "down" ? "down" : "up",
         username: info.name,
         color: {
-          background: `${info.color}33`,
+          background: info.color,
           stroke: info.color,
         },
         selectedElementIds: (state as any).selectedElementIds ?? {},
@@ -194,6 +197,15 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       api.updateScene({ appState: { collaborators: map } as any, captureUpdate: "NEVER" as any });
     }
   }, []);
+
+  // 光标移动很频繁，在线状态合并到 80ms 一次再刷新
+  const scheduleSyncCollaborators = useCallback(() => {
+    if (collabSyncTimerRef.current) return;
+    collabSyncTimerRef.current = window.setTimeout(() => {
+      collabSyncTimerRef.current = null;
+      syncCollaborators();
+    }, 80);
+  }, [syncCollaborators]);
 
   // 本地光标 / 选区广播（节流）
   const broadcastPointer = useCallback((payload: any) => {
@@ -436,7 +448,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
     });
 
     const handleAwareness = () => {
-      if (!cancelled) syncCollaborators();
+      if (!cancelled) scheduleSyncCollaborators();
     };
     provider.awareness.on("change", handleAwareness);
 
@@ -460,7 +472,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       providerRef.current = null;
       doc.destroy();
     };
-  }, [canvas.id, initialScene, syncCollaborators, user.username, user.displayName, user.color]);
+  }, [canvas.id, initialScene, scheduleSyncCollaborators, user.username, user.displayName, user.color]);
 
   // 缩略图：进入后生成一次，之后定期刷新
   const saveThumbnail = useCallback(async () => {
@@ -537,6 +549,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       if (remoteTimerRef.current) window.clearTimeout(remoteTimerRef.current);
       if (extractTimerRef.current) window.clearTimeout(extractTimerRef.current);
       if (pointerTimerRef.current) window.clearTimeout(pointerTimerRef.current);
+      if (collabSyncTimerRef.current) window.clearTimeout(collabSyncTimerRef.current);
     };
   }, []);
 

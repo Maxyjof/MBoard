@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { verifyCredentials } from "@/lib/auth/accounts";
-import { SESSION_COOKIE, sessionMaxAgeDays, signSession } from "@/lib/auth/token";
+import { authenticate } from "@/lib/auth/profile";
+import { applySessionCookie } from "@/lib/auth/cookie";
 
 const BodySchema = z.object({
   username: z.string().trim().min(1).max(64),
@@ -50,9 +50,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请填写用户名和密码" }, { status: 400 });
   }
 
-  let account: Awaited<ReturnType<typeof verifyCredentials>>;
+  let account: Awaited<ReturnType<typeof authenticate>>;
   try {
-    account = await verifyCredentials(parsed.data.username, parsed.data.password);
+    account = await authenticate(parsed.data.username, parsed.data.password);
   } catch (error) {
     console.error("[login]", error);
     return NextResponse.json(
@@ -67,16 +67,7 @@ export async function POST(request: Request) {
 
   buckets.delete(key);
 
-  const token = await signSession(account);
   const response = NextResponse.json({ user: account });
-
-  response.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.COOKIE_SECURE === "true",
-    path: "/",
-    maxAge: sessionMaxAgeDays() * 24 * 60 * 60,
-  });
-
+  await applySessionCookie(response, account);
   return response;
 }

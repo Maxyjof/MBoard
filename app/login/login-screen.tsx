@@ -194,7 +194,7 @@ export function LoginScreen({ nextPath, appName }: LoginScreenProps) {
             </form>
 
             <p className="mt-8 text-center text-[11.5px] leading-5 text-faint">
-              登录状态保留 7 天，可在左下角随时退出
+              登录状态保留 7 天，登录后可在账号设置中修改显示名和密码
             </p>
           </div>
         </div>

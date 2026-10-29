@@ -4,7 +4,7 @@ import YAML from "yaml";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
-// 账号配置：只从配置文件读取，不入库
+// 账号白名单：只从配置文件读取，账号本身不入库
 const AccountSchema = z
   .object({
     username: z.string().min(1).max(64),
@@ -80,29 +80,17 @@ function loadAccounts(): Account[] {
   return accounts;
 }
 
-// 用账号密码校验身份，成功返回展示信息
-export async function verifyCredentials(
-  username: string,
-  password: string
-): Promise<{ username: string; displayName: string; color: string } | null> {
-  const accounts = loadAccounts();
-  const account = accounts.find((item) => item.username === username);
-
-  if (!account) {
-    // 做一次无效比较，避免通过响应时间枚举账号
-    await bcrypt.compare(password, "$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv");
-    return null;
-  }
-
-  const matched = account.passwordHash
-    ? await bcrypt.compare(password, account.passwordHash)
-    : password === account.password;
-
-  if (!matched) return null;
-
-  return {
-    username: account.username,
-    displayName: account.displayName,
-    color: account.color,
-  };
+// 按用户名取配置账号
+export function getAccount(username: string): Account | null {
+  return loadAccounts().find((item) => item.username === username) ?? null;
 }
+
+// 校验配置文件里的初始密码
+export async function verifyAccountPassword(account: Account, password: string): Promise<boolean> {
+  return account.passwordHash
+    ? bcrypt.compare(password, account.passwordHash)
+    : password === account.password;
+}
+
+// 未知账号也做一次无效比较，避免通过响应时间枚举用户名
+export const DUMMY_PASSWORD_HASH = "$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv";

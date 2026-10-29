@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronRight,
   LayoutGrid,
@@ -12,6 +12,7 @@ import {
   PanelLeftOpen,
   PenLine,
   Plus,
+  Settings,
   Sun,
   X,
 } from "lucide-react";
@@ -247,6 +248,8 @@ function UserMenu({
   themeMode: "light" | "dark";
   onToggleTheme: () => void;
 }) {
+  const router = useRouter();
+
   return (
     <Dropdown
       width={200}
@@ -275,6 +278,13 @@ function UserMenu({
         <p className="truncate text-[11px] text-faint">@{user.username}</p>
       </div>
       <MenuDivider />
+      <MenuItem
+        icon={<Settings />}
+        onClick={() => router.push("/settings")}
+        data-skip-autofocus
+      >
+        账号设置
+      </MenuItem>
       <MenuItem
         icon={themeMode === "dark" ? <Sun /> : <Moon />}
         onClick={onToggleTheme}

@@ -6,11 +6,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// 生成头像/协作者初始字
+// 生成头像/协作者初始字：英文取首字母，中文取前两个字符
 export function initials(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return "?";
   const chars = Array.from(trimmed);
+  if (/^[A-Za-z]/.test(trimmed)) {
+    return chars[0].toUpperCase();
+  }
   return chars.slice(0, 2).join("").toUpperCase();
 }
 

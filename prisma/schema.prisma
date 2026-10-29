@@ -109,3 +109,13 @@ model Document {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+/// 账号的个人覆盖设置：显示名、光标颜色、修改后的密码
+/// 账号本身仍由 config/accounts.yml 管理，这里只保存用户自己在设置页改过的值
+model UserProfile {
+  username     String   @id
+  displayName  String
+  color        String   @default("#6353f5")
+  passwordHash String?
+  updatedAt    DateTime @updatedAt
+}
