@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: 247 248 251;
+    --surface: 255 255 255;
+    --surface-2: 244 245 248;
+    --elevated: 255 255 255;
+    --line: 228 230 236;
+    --ink: 24 27 35;
+    --muted: 97 104 119;
+    --faint: 145 151 163;
+    --brand: 99 84 246;
+    --brand-soft: 238 235 255;
+    --brand-ink: 255 255 255;
+    --danger: 219 55 74;
+    --success: 16 158 110;
+    --warning: 214 145 21;
+    --canvas: 250 250 252;
+  }
+
+  .dark {
+    --bg: 13 15 20;
+    --surface: 20 23 30;
+    --surface-2: 26 30 39;
+    --elevated: 24 27 35;
+    --line: 42 47 59;
+    --ink: 236 238 244;
+    --muted: 158 165 179;
+    --faint: 108 115 130;
+    --brand: 124 111 255;
+    --brand-soft: 40 37 72;
+    --brand-ink: 255 255 255;
+    --danger: 244 92 108;
+    --success: 45 201 145;
+    --warning: 245 183 66;
+    --canvas: 17 19 25;
+  }
+
+  * {
+    border-color: rgb(var(--line));
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-bg text-ink antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background: rgb(var(--brand) / 0.24);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand) / 0.6);
+    outline-offset: 2px;
+  }
+
+  input,
+  textarea {
+    @apply bg-transparent;
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink shadow-sm outline-none transition
+      placeholder:text-faint focus:border-brand/60 focus:ring-2 focus:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .field-ghost {
+    @apply w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm outline-none transition
+      hover:bg-surface-2 focus:border-brand/50 focus:bg-surface focus:ring-2 focus:ring-brand/15;
+  }
+
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium leading-4;
+  }
+
+  .menu-item {
+    @apply flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-ink transition
+      hover:bg-surface-2 focus:bg-surface-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .menu-item-danger {
+    @apply text-danger hover:bg-danger/10 focus:bg-danger/10;
+  }
+
+  .icon-btn {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition
+      hover:bg-surface-2 hover:text-ink focus-visible:outline-none;
+  }
+
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--faint) / 0.45) transparent;
+  }
+
+  .scroll-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background: rgb(var(--faint) / 0.4);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .scroll-thin::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--faint) / 0.6);
+    background-clip: content-box;
+  }
+
+  .scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dot-grid {
+    background-image: radial-gradient(rgb(var(--faint) / 0.35) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  .mesh {
+    background-image:
+      radial-gradient(at 18% 12%, rgb(124 111 255 / 0.35) 0px, transparent 45%),
+      radial-gradient(at 82% 18%, rgb(56 189 248 / 0.28) 0px, transparent 42%),
+      radial-gradient(at 72% 88%, rgb(244 114 182 / 0.22) 0px, transparent 45%),
+      radial-gradient(at 12% 84%, rgb(45 212 191 / 0.22) 0px, transparent 42%);
+  }
+
+  .prose-mb {
+    @apply text-[13.5px] leading-6 text-ink;
+  }
+
+  .prose-mb h1 {
+    @apply mb-2 mt-4 text-lg font-semibold;
+  }
+
+  .prose-mb h2 {
+    @apply mb-2 mt-4 text-base font-semibold;
+  }
+
+  .prose-mb h3 {
+    @apply mb-1.5 mt-3 text-sm font-semibold;
+  }
+
+  .prose-mb p {
+    @apply my-2;
+  }
+
+  .prose-mb ul {
+    @apply my-2 list-disc space-y-1 pl-5;
+  }
+
+  .prose-mb ol {
+    @apply my-2 list-decimal space-y-1 pl-5;
+  }
+
+  .prose-mb a {
+    @apply text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand;
+  }
+
+  .prose-mb code {
+    @apply rounded bg-surface-2 px-1 py-0.5 font-mono text-[12px] text-brand;
+  }
+
+  .prose-mb pre {
+    @apply my-2 overflow-x-auto rounded-xl bg-surface-2 p-3 text-[12px];
+  }
+
+  .prose-mb pre code {
+    @apply bg-transparent p-0 text-ink;
+  }
+
+  .prose-mb blockquote {
+    @apply my-2 border-l-2 border-brand/40 pl-3 text-muted;
+  }
+
+  .prose-mb table {
+    @apply my-2 w-full border-collapse overflow-hidden rounded-lg text-[12.5px];
+  }
+
+  .prose-mb th,
+  .prose-mb td {
+    @apply border border-line px-2.5 py-1.5 text-left;
+  }
+
+  .prose-mb th {
+    @apply bg-surface-2 font-medium;
+  }
+
+  .prose-mb hr {
+    @apply my-3 border-line;
+  }
+
+  .prose-mb img {
+    @apply my-2 max-w-full rounded-lg;
+  }
+}

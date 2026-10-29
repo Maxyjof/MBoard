@@ -1,0 +1,173 @@
+# MBoard
+
+> Trello 的秩序，AFFiNE 的自由。固定账号登录、全局共享的看板 + 无限画布协作工作台。
+
+![登录页](docs/screenshots/login.png)
+
+## 功能特性
+
+### 账号与访问
+- 账号预置在 `config/accounts.yml`，支持明文密码或 bcrypt 哈希
+- JWT + HttpOnly Cookie 会话，中间件统一拦截未登录请求
+- 登录用户权限平等，所有看板、画板、文档、附件全局共享
+- 深浅色主题、响应式布局
+
+### 看板（Trello 式）
+- 看板 → 列表 → 卡片三级结构，列表横排拖拽排序
+- 卡片跨列表拖动，乐观更新 + 失败回滚
+- 卡片详情抽屉：标题、标签、截止时间、Markdown 描述（编辑 / 预览）、附件上传下载、归档、删除
+- 看板重命名、描述、主题色、删除，空状态引导
+
+![看板页](docs/screenshots/boards.png)
+
+### 无限画布（AFFiNE 式）
+- 基于 Excalidraw 内核：无限坐标系、平移缩放、框选、撤销重做、旋转缩放、图层顺序、自由连线与锚点吸附
+- 侧栏一键插入：便签、文本、矩形 / 圆形 / 菱形、箭头、图片、视频、Markdown 文档卡片、表格模板
+- 图片自动转存资源库并注入画布，避免场景 JSON 膨胀
+- 文档卡片选中即可在右侧预览渲染后的 Markdown
+- 画板库支持缩略图、搜索、重命名、删除、复制链接
+
+![画布](docs/screenshots/canvas.png)
+
+### 实时协作
+- 画布基于 **Yjs CRDT + WebSocket**，多人同时编辑自动合并，不会互相覆盖
+- 在线成员头像、实时光标、选区高亮、断线重连
+- 服务端增量持久化到 SQLite，空闲房间自动卸载
+- 画布缩略图由客户端定时导出并上传，画板库实时可见
+
+| 看板（深色） | 画布（深色） |
+| --- | --- |
+| ![看板深色](docs/screenshots/boards-dark.png) | ![画布深色](docs/screenshots/canvas-dark.png) |
+
+## 技术栈
+
+| 层 | 选型 |
+| --- | --- |
+| 框架 | Next.js 15.5（App Router）+ React 19 + TypeScript |
+| 样式 | Tailwind CSS 3.4 + 自建设计 token / 组件 |
+| 数据库 | SQLite + Prisma 6 |
+| 画布 | Excalidraw 0.18（MIT）+ 自研 Yjs 协作绑定 |
+| 协作 | Yjs + y-protocols + ws（与 Next 共用端口） |
+| 拖拽 | dnd-kit |
+| Markdown | react-markdown + remark-gfm |
+| 鉴权 | jose（JWT）+ bcryptjs |
+| 部署 | Docker Compose（单容器 + 数据卷） |
+
+## 快速开始（本地）
+
+环境：Node.js ≥ 20、npm。
+
+```bash
+cd D:\JS_Workspace\MBoard
+
+npm install
+copy .env.example .env     # macOS / Linux: cp .env.example .env
+
+npm run setup              # 生成 Prisma Client、建表、写入演示数据
+npm run dev                # http://localhost:3000
+```
+
+默认账号（见 `config/accounts.yml`，上线前务必修改）：
+
+| 用户名 | 密码 | 显示名 |
+| --- | --- | --- |
+| admin | admin123 | 管理员 |
+| maxy | maxy123 | Maxy |
+| guest | guest123 | 访客 |
+
+> PowerShell 默认禁止运行 `npm.ps1` 时，用 `cmd /c "npm.cmd run dev"`。
+
+## Docker 部署
+
+```bash
+copy .env.example .env
+# 修改 .env 里的 AUTH_SECRET 和 config/accounts.yml 里的账号
+
+docker compose up -d --build
+# 打开 http://服务器IP:3000
+```
+
+- 数据库与上传文件：`./data`（挂载进容器 `/app/data`，备份这个目录即可）
+- 账号配置：`./config/accounts.yml`（只读挂载，改完 `docker compose restart`）
+- 容器启动时自动执行 `prisma db push` 和幂等种子脚本
+- 反向代理、HTTPS、备份升级见 [部署文档](docs/DEPLOY.md)
+
+## 账号配置
+
+```yaml
+# config/accounts.yml
+users:
+  - username: admin
+    passwordHash: "$2b$10$..."   # 推荐：bcrypt 哈希
+    displayName: "管理员"
+    color: "#6353f5"             # 协作光标 / 头像底色
+```
+
+生成哈希：
+
+```bash
+npm run hash -- "你的新密码"
+```
+
+修改配置后重启服务生效；新增 / 删除账号只改文件，不需要数据库。
+
+## 常用脚本
+
+| 命令 | 说明 |
+| --- | --- |
+| `npm run dev` | 开发模式（Next + 协作 WebSocket，同端口） |
+| `npm run build` / `npm start` | 生产构建 / 启动 |
+| `npm run setup` | 生成 Client、建表、种子数据 |
+| `npm run typecheck` | TypeScript 全量检查 |
+| `npm run db:seed` | 手动补种子数据（幂等） |
+| `npm run hash -- "密码"` | 生成 bcrypt 哈希 |
+
+## 目录结构
+
+```text
+MBoard/
+├── app/                    # App Router：页面与 API
+│   ├── (workspace)/        # 带侧边栏的工作台布局
+│   │   ├── boards/         # 看板
+│   │   └── canvases/       # 画板库
+│   ├── canvas/[id]/        # 全屏画布编辑器
+│   ├── login/              # 登录页
+│   └── api/                # 看板 / 画板 / 资源 / 文档 / 鉴权
+├── components/
+│   ├── ui/                 # 基础组件
+│   ├── workspace/          # 侧边栏、工作台外壳
+│   ├── kanban/             # 看板组件
+│   └── canvas/             # 画布编辑器与资源面板
+├── lib/
+│   ├── auth/               # 会话、账号配置
+│   ├── collab/             # Yjs 服务端 + 浏览器 Provider
+│   └── prisma.ts
+├── prisma/                 # schema 与种子数据
+├── config/accounts.yml     # 账号白名单
+├── docker/                 # 容器入口脚本
+├── docs/                   # 契约、架构、部署、截图
+└── server.mjs              # Next + WebSocket 统一入口
+```
+
+## 文档
+
+- [架构与协作机制](docs/ARCHITECTURE.md)
+- [Docker / 云服务器部署](docs/DEPLOY.md)
+- [开发契约与接口清单](docs/CONTRACT.md)
+
+## 已知限制
+
+- 看板多人协作以服务端数据为准，其他成员的改动需要刷新或切换页面后可见；画布是实时同步
+- 通用上传资源暂未提供独立删除接口（卡片删除后文件保留），画板缩略图会随画板删除清理
+- SQLite 单实例写入，适合小团队；水平扩展需换 Postgres 并把 Yjs 持久化迁到共享存储
+- 暂未提供历史版本、回收站、权限分级
+
+## 验证脚本（可选）
+
+需要本机 Chrome 与已启动的服务：
+
+```bash
+node scripts/collab-test.mjs <canvasId>          # 协议层双端同步测试
+node scripts/collab-e2e.mjs <canvasId>           # 双标签页真实协作（仅开发模式）
+node scripts/browser-check.mjs /boards board.png # 无头浏览器截图 + 控制台检查
+```

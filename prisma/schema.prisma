@@ -1,0 +1,111 @@
+// MBoard 数据模型
+// 设计原则：所有看板、画板、文档均为全局共享资源，不做用户私有隔离
+// 登录账号存放在 config/accounts.yml，不进入数据库
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// 看板（Trello 中的 Board）
+model Board {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  accent      String      @default("#6353f5")
+  sort        Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  lists       BoardList[]
+
+  @@index([sort])
+}
+
+/// 看板列表（Trello 中的 List）
+model BoardList {
+  id        String      @id @default(cuid())
+  boardId   String
+  title     String
+  sort      Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  board     Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards     BoardCard[]
+
+  @@index([boardId, sort])
+}
+
+/// 卡片
+model BoardCard {
+  id            String           @id @default(cuid())
+  listId        String
+  title         String
+  descriptionMd String           @default("")
+  labels        String           @default("[]")
+  dueDate       DateTime?
+  archived      Boolean          @default(false)
+  sort          Int              @default(0)
+  coverAssetId  String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  list          BoardList        @relation(fields: [listId], references: [id], onDelete: Cascade)
+  attachments   CardAttachment[]
+
+  @@index([listId, sort])
+}
+
+/// 卡片附件关联
+model CardAttachment {
+  id        String    @id @default(cuid())
+  cardId    String
+  assetId   String
+  createdAt DateTime  @default(now())
+  card      BoardCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  asset     Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+}
+
+/// 无限画板
+/// sceneJson 为元素快照（用于缩略图/导出兜底），ydoc 为 Yjs 二进制状态（实时协作的真实数据源）
+model Canvas {
+  id               String   @id @default(cuid())
+  title            String
+  description      String?
+  sceneJson        String   @default("{}")
+  ydoc             Bytes?
+  thumbnailAssetId String?
+  version          Int      @default(1)
+  lastEditor       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  thumbnailAsset   Asset?   @relation("CanvasThumbnail", fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
+}
+
+/// 上传的静态资源：图片、视频、Markdown 附件、画板缩略图
+model Asset {
+  id              String           @id @default(cuid())
+  filename        String
+  mimeType        String
+  size            Int
+  storageKey      String           @unique
+  kind            String           @default("file")
+  createdAt       DateTime         @default(now())
+  cardAttachments CardAttachment[]
+  canvasThumbnails Canvas[]        @relation("CanvasThumbnail")
+}
+
+/// 画布中可嵌入的 Markdown 文档
+model Document {
+  id        String   @id @default(cuid())
+  title     String
+  contentMd String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

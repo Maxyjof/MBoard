@@ -1,0 +1,11 @@
+* text=auto
+
+# 容器与 Shell 脚本必须保持 LF
+*.sh text eol=lf
+docker/entrypoint.sh text eol=lf
+Dockerfile text eol=lf
+
+# 图片按二进制处理
+*.png binary
+*.jpg binary
+*.ico binary

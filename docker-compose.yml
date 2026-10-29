@@ -1,0 +1,40 @@
+services:
+  mboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mboard:latest
+    container_name: mboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+
+    # 账号密钥等敏感配置从 .env 读取（先在服务器上 cp .env.example .env 并修改）
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Shanghai
+      DATABASE_URL: "file:../data/mboard.db"
+      UPLOAD_DIR: "/app/data/uploads"
+      ACCOUNTS_FILE: "/app/config/accounts.yml"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+
+    volumes:
+      # 数据库与上传文件都在 data/ 下，备份这个目录即可
+      - ./data:/app/data
+      # 账号配置文件只读挂载，改完重启容器生效
+      - ./config:/app/config:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
