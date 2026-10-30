@@ -304,7 +304,191 @@ export async function insertVideoCard(api: ExcalidrawImperativeAPI, asset: Asset
   appendElements(api, elements, { mbVideoAssetId: asset.id, mbVideoName: asset.filename });
 }
 
-// 把选中的元素组合成一个带标题的卡片容器，拖动任意成员即可整体移动
+// 组合卡片：标题 + 字段列表 + 关联文档，整体作为一个分组移动
+export type CompositeCardInput = {
+  title: string;
+  fields: string[];
+  document?: {
+    id: string;
+    title: string;
+    words?: number;
+  } | null;
+};
+
+export async function insertCompositeCard(
+  api: ExcalidrawImperativeAPI,
+  input: CompositeCardInput
+) {
+  const width = 420;
+  const headerHeight = 100;
+  const fieldHeight = 58;
+  const fieldGap = 8;
+  const docHeight = input.document ? 78 : 0;
+  const height =
+    headerHeight + input.fields.length * (fieldHeight + fieldGap) + docHeight + 24;
+
+  const center = cascadeCenter(api, width, height);
+  const x = center.x - width / 2;
+  const y = center.y - height / 2;
+  const groupId = crypto.randomUUID();
+  const contentWidth = width - 80;
+
+  const skeletons: any[] = [
+    {
+      type: "rectangle",
+      x,
+      y,
+      width,
+      height,
+      backgroundColor: "#ffffff",
+      fillStyle: "solid",
+      strokeColor: "#dee2e6",
+      strokeWidth: 1.5,
+      roundness: { type: 3 },
+    },
+    {
+      type: "text",
+      x: x + 24,
+      y: y + 20,
+      width: width - 48,
+      text: input.title || "未命名组合",
+      fontSize: 22,
+      fontFamily: 2,
+      textAlign: "center",
+      strokeColor: "#1e1e1e",
+    },
+    {
+      type: "text",
+      x: x + 24,
+      y: y + 56,
+      width: width - 48,
+      text: `${input.fields.length} 个字段${input.document ? " · 1 个文档" : ""}`,
+      fontSize: 13,
+      fontFamily: 2,
+      textAlign: "center",
+      strokeColor: "#868e96",
+    },
+  ];
+
+  input.fields.forEach((field, index) => {
+    const rowY = y + headerHeight + index * (fieldHeight + fieldGap);
+    skeletons.push({
+      type: "rectangle",
+      x: x + 20,
+      y: rowY,
+      width: width - 40,
+      height: fieldHeight,
+      backgroundColor: "#ffffff",
+      fillStyle: "solid",
+      strokeColor: "#e9ecef",
+      strokeWidth: 1,
+      roundness: { type: 2 },
+    });
+    skeletons.push({
+      type: "text",
+      x: x + 36,
+      y: rowY + 16,
+      width: contentWidth,
+      text: field || "填写内容",
+      fontSize: 15,
+      fontFamily: 2,
+      strokeColor: "#343a40",
+    });
+  });
+
+  const built = await build(skeletons);
+
+  // convert 对 text 的宽度处理不一致，这里强制标题居中、副标题左对齐
+  const titleElement = built[1] as any;
+  if (titleElement?.type === "text") {
+    titleElement.x = x + 24;
+    titleElement.width = width - 48;
+    titleElement.textAlign = "center";
+  }
+  const metaElement = built[2] as any;
+  if (metaElement?.type === "text") {
+    metaElement.x = x + 24;
+    metaElement.width = width - 48;
+    metaElement.textAlign = "left";
+  }
+
+  const docRowY = y + headerHeight + input.fields.length * (fieldHeight + fieldGap);
+  const docSkeletons: any[] = input.document
+    ? [
+        {
+          type: "rectangle",
+          x: x + 20,
+          y: docRowY,
+          width: width - 40,
+          height: 70,
+          backgroundColor: "#f8f9fa",
+          fillStyle: "solid",
+          strokeColor: "#e9ecef",
+          strokeWidth: 1,
+          roundness: { type: 2 },
+        },
+        {
+          type: "text",
+          x: x + 36,
+          y: docRowY + 20,
+          text: "📄",
+          fontSize: 22,
+          fontFamily: 2,
+          strokeColor: "#495057",
+        },
+        {
+          type: "text",
+          x: x + 76,
+          y: docRowY + 12,
+          width: width - 120,
+          text: input.document.title,
+          fontSize: 15,
+          fontFamily: 2,
+          strokeColor: "#343a40",
+        },
+        {
+          type: "text",
+          x: x + 76,
+          y: docRowY + 38,
+          width: width - 120,
+          text: `${input.document.words ?? 0} 字 · 点击打开`,
+          fontSize: 12,
+          fontFamily: 2,
+          strokeColor: "#868e96",
+        },
+      ]
+    : [];
+
+  const docElements = docSkeletons.length > 0 ? await build(docSkeletons) : [];
+  if (input.document && docElements.length > 0) {
+    (docElements[0] as any).customData = {
+      mbDocId: input.document.id,
+      mbDocTitle: input.document.title,
+    };
+    (docElements[2] as any).customData = {
+      mbDocId: input.document.id,
+      mbDocTitle: input.document.title,
+    };
+  }
+
+  const allElements = [...built, ...docElements];
+
+  // 统一分组，拖动任意成员即可整体移动
+  for (const element of allElements) {
+    (element as any).groupIds = [groupId];
+  }
+
+  const selectedElementIds: Record<string, boolean> = {};
+  for (const element of allElements) selectedElementIds[(element as any).id] = true;
+
+  api.updateScene({
+    elements: [...api.getSceneElements(), ...allElements] as any,
+    appState: { selectedElementIds } as any,
+    captureUpdate: "IMMEDIATELY",
+  });
+}
+
+// 把选中的元素分组，拖动任意成员即可整体移动
 export async function groupSelectedElements(api: ExcalidrawImperativeAPI): Promise<boolean> {
   const state = api.getAppState();
   const selectedIds = Object.keys(state.selectedElementIds || {}).filter(
@@ -339,7 +523,7 @@ export async function groupSelectedElements(api: ExcalidrawImperativeAPI): Promi
       type: "text",
       x: minX,
       y: minY - 44,
-      text: "组合卡片",
+      text: "分组容器",
       fontSize: 18,
       strokeColor: "#343a40",
     },

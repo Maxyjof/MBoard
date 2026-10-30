@@ -12,6 +12,7 @@ import {
   FileText,
   FileUp,
   Image as ImageIcon,
+  LayoutPanelTop,
   Loader2,
   Plus,
   RectangleHorizontal,
@@ -31,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MarkdownView } from "@/components/canvas/markdown-view";
+import { CompositeCardDialog } from "@/components/canvas/composite-card-dialog";
 import { cn, relativeTime } from "@/lib/utils";
 import type { DocumentDTO } from "@/lib/types";
 
@@ -45,6 +47,7 @@ const DocumentEditorDialog = dynamic(
 import {
   activateTool,
   groupSelectedElements,
+  insertCompositeCard,
   insertDocCard,
   insertFileCard,
   insertImage,
@@ -126,6 +129,7 @@ export function AssetPanel({
     name: string;
     mime: string;
   } | null>(null);
+  const [compositeOpen, setCompositeOpen] = useState(false);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -535,26 +539,31 @@ export function AssetPanel({
                 onClick={() => void createTableDoc()}
               />
               <InsertTile
-                label="组合"
+                label="组合卡片"
+                icon={<LayoutPanelTop />}
+                onClick={() => setCompositeOpen(true)}
+              />
+              <InsertTile
+                label="分组"
                 icon={<Boxes />}
                 onClick={() =>
                   withApi(async (api) => {
                     const grouped = await groupSelectedElements(api);
                     if (grouped) {
-                      toast.success("已组合，拖动任意成员即可整体移动");
+                      toast.success("已分组，拖动任意成员即可整体移动");
                     } else {
-                      toast.info("请先选中要组合的元素");
+                      toast.info("请先选中要分组的元素");
                     }
                   })
                 }
               />
               <InsertTile
-                label="取消组合"
+                label="取消分组"
                 icon={<Ungroup />}
                 onClick={() =>
                   withApi((api) => {
                     const ungrouped = ungroupSelectedElements(api);
-                    if (ungrouped) toast.success("已取消组合");
+                    if (ungrouped) toast.success("已取消分组");
                     else toast.info("选中的元素没有分组");
                   })
                 }
@@ -585,7 +594,7 @@ export function AssetPanel({
             </div>
 
             <p className="px-1 text-[11px] leading-5 text-faint">
-              提示：文档/文件卡片单击即可打开；选中多个元素后点「组合」可以整体拖动。
+              提示：文档/文件卡片单击即可打开；「组合卡片」是带标题和字段的故事卡；「分组」用来把任意元素打包移动。
             </p>
           </div>
         ) : (
@@ -715,6 +724,17 @@ export function AssetPanel({
         onInsert={(doc) => {
           withApi((api) => insertDocCard(api, doc));
           toast.success("文档卡片已插入画布");
+        }}
+      />
+
+      {/* 组合卡片：标题 + 字段 + 关联文档 */}
+      <CompositeCardDialog
+        open={compositeOpen}
+        onOpenChange={setCompositeOpen}
+        documents={docs.map((doc) => ({ id: doc.id, title: doc.title }))}
+        onCreate={(input) => {
+          withApi((api) => insertCompositeCard(api, input));
+          toast.success("组合卡片已插入");
         }}
       />
 
