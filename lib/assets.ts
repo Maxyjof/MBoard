@@ -128,7 +128,7 @@ export function resolveStoragePath(storageKey: string): string | null {
 }
 
 export function assetUrl(assetId: string | null | undefined): string | null {
-  return assetId ? `/api/assets/${assetId}` : null;
+  return assetId ? `/mboard/api/assets/${assetId}` : null;
 }
 
 type AssetRow = {
@@ -146,7 +146,7 @@ export function toAssetDTO(asset: AssetRow): AssetDTO {
     mimeType: asset.mimeType,
     size: asset.size,
     kind: asset.kind,
-    url: `/api/assets/${asset.id}`,
+    url: `/mboard/api/assets/${asset.id}`,
   };
 }
 

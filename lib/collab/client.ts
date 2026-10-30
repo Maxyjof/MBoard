@@ -87,7 +87,7 @@ export class CollabConnection {
     this.setStatus("connecting");
 
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const url = `${protocol}://${window.location.host}/collab?canvasId=${encodeURIComponent(
+    const url = `${protocol}://${window.location.host}/mboard/collab?canvasId=${encodeURIComponent(
       this.canvasId
     )}`;
 

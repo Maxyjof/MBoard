@@ -15,6 +15,9 @@ type ModalProps = {
   size?: "sm" | "md" | "lg" | "xl";
   hideClose?: boolean;
   className?: string;
+  bodyClassName?: string;
+  lockViewport?: boolean;
+  centered?: boolean;
 };
 
 const sizes = {
@@ -35,6 +38,9 @@ export function Modal({
   size = "md",
   hideClose = false,
   className,
+  bodyClassName,
+  lockViewport = false,
+  centered = false,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -70,7 +76,11 @@ export function Modal({
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto p-4 pt-[10vh] sm:p-6 sm:pt-[12vh]">
+    <div className={cn(
+      "fixed inset-0 z-[120] flex justify-center p-4 sm:p-6",
+      centered ? "items-center" : "items-start pt-[10vh] sm:pt-[12vh]",
+      lockViewport ? "overflow-hidden" : "overflow-y-auto"
+    )}>
       <div
         className="fixed inset-0 bg-slate-950/45 backdrop-blur-[2px] animate-fade-in"
         onClick={() => onOpenChange(false)}
@@ -106,7 +116,7 @@ export function Modal({
           </div>
         )}
 
-        <div className={cn("px-5 py-4", !title && !description && "pt-5")}>{children}</div>
+        <div className={cn("px-5 py-4", !title && !description && "pt-5", bodyClassName)}>{children}</div>
 
         {footer ? (
           <div className="flex items-center justify-end gap-2 border-t border-line bg-surface-2/50 px-5 py-3.5">

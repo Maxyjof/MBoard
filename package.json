@@ -42,6 +42,7 @@
     "remark-gfm": "4.0.1",
     "sonner": "2.0.8",
     "tailwind-merge": "2.6.0",
+    "vditor": "^3.11.0",
     "ws": "8.22.0",
     "y-protocols": "1.0.7",
     "yaml": "2.9.1",

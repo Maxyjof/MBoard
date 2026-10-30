@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "vditor/dist/index.css";
 import { AppToaster } from "@/components/ui/toaster";
+import { AppPathBootstrap } from "@/components/app-path-bootstrap";
 
 export const metadata: Metadata = {
   title: {
@@ -34,13 +36,30 @@ const themeScript = `
 })();
 `;
 
+const basePathScript = `
+(function () {
+  var base = "/mboard";
+  var original = window.fetch.bind(window);
+  function prefix(value) {
+    return typeof value === "string" && value.charAt(0) === "/" && value.indexOf(base + "/") !== 0 &&
+      (value.indexOf("/api/") === 0 || value === "/api" || value.indexOf("/vditor/") === 0);
+  }
+  window.fetch = function (input, init) {
+    if (prefix(input)) return original(base + input, init);
+    return original(input, init);
+  };
+})();
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: basePathScript }} />
       </head>
       <body>
+        <AppPathBootstrap />
         {children}
         <AppToaster />
       </body>

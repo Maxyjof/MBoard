@@ -58,6 +58,7 @@ import {
   insertSticky,
   insertText,
   insertVideoCard,
+  updateTableCard,
   ungroupSelectedElements,
   updateCompositeCard,
 } from "./insert";
@@ -68,6 +69,8 @@ type DocListItem = Omit<DocumentDTO, "contentMd">;
 export type CanvasSelection = {
   docId?: string;
   docTitle?: string;
+  tableDocId?: string;
+  tableTitle?: string;
   videoAssetId?: string;
   videoName?: string;
   fileAssetId?: string;
@@ -328,7 +331,7 @@ export function AssetPanel({
         return;
       }
       withApi((api) => insertDocCard(api, data.document!));
-      toast.success("表格已插入，可直接在弹窗里编辑单元格");
+      toast.success("表格已插入，可直接在画布单元格中编辑");
       setTab("docs");
       await loadDocs(query.trim());
       setActiveDoc(data.document);
@@ -340,11 +343,23 @@ export function AssetPanel({
     }
   }
 
-  async function openDoc(id: string) {
+  async function openDoc(id: string, fallbackTitle?: string) {
     try {
       const response = await fetch(`/api/documents/${id}`);
       const data = (await response.json()) as { document?: DocumentDTO; error?: string };
       if (!response.ok || !data.document) {
+        const fallback = fallbackTitle
+          ? docs.find((doc) => doc.title === fallbackTitle)
+          : undefined;
+        if (fallback && fallback.id !== id) {
+          const retry = await fetch(`/api/documents/${fallback.id}`);
+          const retryData = (await retry.json()) as { document?: DocumentDTO; error?: string };
+          if (retry.ok && retryData.document) {
+            setActiveDoc(retryData.document);
+            setDialogOpen(true);
+            return;
+          }
+        }
         toast.error(data.error || "文档不存在");
         return;
       }
@@ -403,11 +418,19 @@ export function AssetPanel({
     }
   }
 
-  function insertExistingDoc(doc: DocListItem) {
-    withApi((api) => {
-      insertDocCard(api, doc);
-      toast.success("文档卡片已插入");
-    });
+  async function insertExistingDoc(doc: DocListItem) {
+    try {
+      const response = await fetch(`/api/documents/${doc.id}`);
+      const data = (await response.json()) as { document?: DocumentDTO; error?: string };
+      if (!response.ok || !data.document) {
+        toast.error(data.error || "读取文档失败");
+        return;
+      }
+      withApi((api) => void insertDocCard(api, data.document!));
+      toast.success(doc.kind === "table" ? "表格已插入画布" : "文档卡片已插入");
+    } catch {
+      toast.error("读取文档失败");
+    }
   }
 
   return (
@@ -440,7 +463,26 @@ export function AssetPanel({
         </div>
       </div>
 
-      {selection?.docId ? (
+      {selection?.tableDocId ? (
+        <div className="mx-3 mt-3 overflow-hidden rounded-xl border border-brand/25 bg-brand/5">
+          <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-brand">已选中表格</p>
+              <p className="mt-0.5 truncate text-[12.5px] font-medium text-ink">{selection.tableTitle || "表格"}</p>
+            </div>
+            <Button
+              size="sm"
+              variant="subtle"
+              onClick={() => void openDoc(selection.tableDocId!, selection.tableTitle)}
+            >
+              编辑行列
+            </Button>
+          </div>
+          <p className="border-t border-brand/15 px-3 py-2 text-[11px] text-muted">
+            画布中的单元格可直接双击编辑；需要增加或删除行列时点击“编辑行列”。
+          </p>
+        </div>
+      ) : selection?.docId ? (
         <div className="mx-3 mt-3 overflow-hidden rounded-xl border border-brand/25 bg-brand/5">
           <div className="flex items-center justify-between gap-2 px-3 py-2.5">
             <div className="min-w-0">
@@ -682,7 +724,7 @@ export function AssetPanel({
                       </button>
                       <button
                         type="button"
-                        onClick={() => insertExistingDoc(doc)}
+                        onClick={() => void insertExistingDoc(doc)}
                         className="icon-btn h-7 w-7 opacity-0 transition group-hover:opacity-100"
                         aria-label="插入到画布"
                       >
@@ -748,6 +790,11 @@ export function AssetPanel({
           setActiveDoc(doc);
           setPreviewDoc((previous) => (previous?.id === doc.id ? doc : previous));
           void loadDocs(query.trim());
+          if (doc.kind === "table") {
+            withApi(async (api) => {
+              await updateTableCard(api, doc);
+            });
+          }
         }}
         onInsert={(doc) => {
           withApi((api) => insertDocCard(api, doc));
@@ -785,6 +832,7 @@ export function AssetPanel({
         open={Boolean(filePreview)}
         onOpenChange={(open) => !open && setFilePreview(null)}
         size="xl"
+        centered
         title={filePreview?.name}
         description="文件资源 · 支持下载"
         footer={
@@ -793,7 +841,7 @@ export function AssetPanel({
               <span className="text-[11px] text-faint">PDF 可在线预览，Office 等格式请下载查看</span>
               <div className="flex items-center gap-2">
                 <a
-                  href={`/api/assets/${filePreview.id}`}
+                  href={`/mboard/api/assets/${filePreview.id}`}
                   download={filePreview.name}
                   className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand px-3.5 text-[13px] font-medium text-white transition hover:bg-brand/90"
                 >
@@ -812,7 +860,7 @@ export function AssetPanel({
           filePreview.mime === "application/pdf" || /\.pdf$/i.test(filePreview.name) ? (
             <iframe
               key={filePreview.id}
-              src={`/api/assets/${filePreview.id}`}
+                    src={`/mboard/api/assets/${filePreview.id}`}
               title={filePreview.name}
               className="h-[62vh] w-full rounded-xl border border-line bg-white"
             />
@@ -838,7 +886,7 @@ export function AssetPanel({
         {videoOpen ? (
           <video
             key={videoOpen}
-            src={`/api/assets/${videoOpen}`}
+                    src={`/mboard/api/assets/${videoOpen}`}
             controls
             autoPlay
             className="max-h-[65vh] w-full rounded-xl bg-black"

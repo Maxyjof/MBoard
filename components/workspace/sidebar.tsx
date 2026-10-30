@@ -274,6 +274,9 @@ function UserMenu({
   return (
     <Dropdown
       width={200}
+      placement="top"
+      // 用户菜单固定从侧栏左边 0px 展开，避免在收起侧栏时向画面外溢出。
+      align="start"
       trigger={
         <button
           type="button"

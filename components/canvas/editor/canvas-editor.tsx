@@ -97,6 +97,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
   const selectionTimerRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const collabSyncTimerRef = useRef<number | null>(null);
+  const tableSaveTimersRef = useRef<Map<string, number>>(new Map());
   const readyRef = useRef(false);
   const apiMountedRef = useRef(false);
 
@@ -122,6 +123,58 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
     composite?: CompositeCardData;
   } | null>(null);
   const compositeMigratedRef = useRef(false);
+
+  const scheduleTableSave = useCallback((elements: readonly any[]) => {
+    const tables = new Map<string, { title: string; cells: Map<string, string> }>();
+    for (const element of elements as any[]) {
+      const cell = element.customData?.mbTableCell;
+      const tableId = element.customData?.mbTableId;
+      if (element.type !== "text" || !tableId || !cell) continue;
+      if (!tables.has(tableId)) {
+        tables.set(tableId, { title: element.customData.mbTableTitle || "表格", cells: new Map() });
+      }
+      tables.get(tableId)!.cells.set(`${cell.row}:${cell.col}`, element.text || "");
+    }
+    for (const [id, table] of tables) {
+      const previous = tableSaveTimersRef.current.get(id);
+      if (previous) window.clearTimeout(previous);
+      const timer = window.setTimeout(async () => {
+        tableSaveTimersRef.current.delete(id);
+        const headerCells = [...table.cells.keys()]
+          .filter((key) => key.startsWith("-1:"))
+          .map((key) => Number(key.split(":")[1]))
+          .sort((a, b) => a - b);
+        if (!headerCells.length) return;
+        const columns = headerCells.length;
+        const headers = headerCells.map((col) => table.cells.get(`-1:${col}`) || "");
+        const rows = new Map<number, string[]>();
+        for (const [key, value] of table.cells) {
+          const [rowText, colText] = key.split(":");
+          const row = Number(rowText);
+          const col = Number(colText);
+          if (row < 0) continue;
+          if (!rows.has(row)) rows.set(row, Array(columns).fill(""));
+          rows.get(row)![col] = value;
+        }
+        const escape = (value: string) => value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+        const contentMd = [
+          `| ${headers.map(escape).join(" | ")} |`,
+          `| ${headers.map(() => "---").join(" | ")} |`,
+          ...[...rows.entries()].sort(([a], [b]) => a - b).map(([, row]) => `| ${row.map(escape).join(" | ")} |`),
+        ].join("\n");
+        try {
+          await fetch(`/api/documents/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contentMd }),
+          });
+        } catch {
+          // 表格仍保留在画布中，网络恢复后可由文档编辑器再次保存
+        }
+      }, 600);
+      tableSaveTimersRef.current.set(id, timer);
+    }
+  }, []);
   const pressedElementIdRef = useRef<string | null>(null);
   const canvasPressRef = useRef<{
     hit: {
@@ -377,6 +430,11 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         const element = elements.find((item) => item.id === selectedIds[0]) as any;
         if (element?.customData?.mbComposite) {
           updateSelection(null);
+        } else if (element?.customData?.mbTableId) {
+          updateSelection({
+            tableDocId: element.customData.mbTableId,
+            tableTitle: element.customData.mbTableTitle,
+          });
         } else if (element?.customData?.mbDocId) {
           updateSelection({ docId: element.customData.mbDocId, docTitle: element.customData.mbDocTitle });
         } else if (element?.customData?.mbVideoAssetId) {
@@ -397,10 +455,12 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         updateSelection(null);
       }
 
+      scheduleTableSave(elements);
+
       markDirty();
       scheduleExtract();
     },
-    [broadcastSelection, markDirty, scheduleExtract, updateSelection]
+    [broadcastSelection, markDirty, scheduleExtract, scheduleTableSave, updateSelection]
   );
 
   const handlePointerUpdate = useCallback(
@@ -695,6 +755,8 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       if (extractTimerRef.current) window.clearTimeout(extractTimerRef.current);
       if (pointerTimerRef.current) window.clearTimeout(pointerTimerRef.current);
       if (collabSyncTimerRef.current) window.clearTimeout(collabSyncTimerRef.current);
+      for (const timer of tableSaveTimersRef.current.values()) window.clearTimeout(timer);
+      tableSaveTimersRef.current.clear();
     };
   }, []);
 

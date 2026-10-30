@@ -45,7 +45,7 @@ export function CanvasLibrary({ initialCanvases }: CanvasLibraryProps) {
   const refresh = useCallback(() => router.refresh(), [router]);
 
   const copyLink = useCallback(async (canvas: CanvasSummary) => {
-    const url = `${window.location.origin}/canvas/${canvas.id}`;
+    const url = `${window.location.origin}/mboard/canvas/${canvas.id}`;
     try {
       await navigator.clipboard.writeText(url);
       toast.success("画板链接已复制");

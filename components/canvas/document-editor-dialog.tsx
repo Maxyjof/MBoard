@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { MarkdownLiveEditor } from "@/components/canvas/markdown-live-editor";
-import { TableEditor, isMarkdownTable } from "@/components/canvas/table-editor";
+import { TableEditor } from "@/components/canvas/table-editor";
 import type { DocumentDTO } from "@/lib/types";
 
 type DocumentEditorDialogProps = {
@@ -35,6 +35,7 @@ export function DocumentEditorDialog({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [inserting, setInserting] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
 
   // 等文档内容准备好再挂载编辑器，避免 CodeMirror 读到空初始值
   useEffect(() => {
@@ -47,11 +48,11 @@ export function DocumentEditorDialog({
       title: document.title,
       content: document.contentMd,
     });
+    setEditingTitle(false);
   }, [open, document?.id]);
 
-  const tableMode =
-    document?.kind === "table" ||
-    (draft ? isMarkdownTable(draft.content) : false);
+  // 只有显式创建的表格文档使用网格编辑器；普通 Markdown 可以自由包含表格。
+  const tableMode = document?.kind === "table";
 
   async function save(): Promise<DocumentDTO | null> {
     if (!draft || !document) return null;
@@ -121,12 +122,10 @@ export function DocumentEditorDialog({
       open={open && Boolean(document)}
       onOpenChange={onOpenChange}
       size="xl"
-      title={tableMode ? "编辑表格" : "编辑文档"}
-      description={
-        tableMode
-          ? "直接编辑单元格，保存时自动转成 Markdown 表格"
-          : "实时渲染 Markdown，光标所在行会显示原始语法"
-      }
+      className="flex h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] max-w-[min(94vw,1500px)] flex-col overflow-hidden"
+      bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3"
+      lockViewport
+      centered
       footer={
         <>
           <Button variant="ghost" onClick={downloadDraft} disabled={!draft || saving || inserting}>
@@ -152,18 +151,46 @@ export function DocumentEditorDialog({
       }
     >
       {draft ? (
-        <div className="space-y-3">
-          <Input
-            value={draft.title}
-            onChange={(event) =>
-              setDraft((previous) =>
-                previous ? { ...previous, title: event.target.value } : previous
-              )
-            }
-            placeholder="文档标题"
-            maxLength={120}
-            disabled={saving || inserting}
-          />
+        <div className="flex h-full min-h-0 flex-col gap-3">
+          <div className="shrink-0 px-1">
+            {editingTitle ? (
+              <Input
+                autoFocus
+                value={draft.title}
+                onChange={(event) =>
+                  setDraft((previous) =>
+                    previous ? { ...previous, title: event.target.value } : previous
+                  )
+                }
+                onBlur={() => setEditingTitle(false)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    setEditingTitle(false);
+                  }
+                  if (event.key === "Escape") {
+                    setDraft((previous) =>
+                      previous ? { ...previous, title: document?.title ?? previous.title } : previous
+                    );
+                    setEditingTitle(false);
+                  }
+                }}
+                placeholder="文件名"
+                maxLength={120}
+                disabled={saving || inserting}
+              />
+            ) : (
+              <button
+                type="button"
+                data-skip-autofocus
+                className="max-w-full truncate rounded-lg px-1 text-left text-[15px] font-medium text-ink hover:bg-surface-2"
+                onDoubleClick={() => setEditingTitle(true)}
+                title="双击修改文件名"
+              >
+                {draft.title || "未命名文档"}
+              </button>
+            )}
+          </div>
 
           {tableMode ? (
             <TableEditor
@@ -173,7 +200,7 @@ export function DocumentEditorDialog({
                 setDraft((previous) => (previous ? { ...previous, content } : previous))
               }
               disabled={saving || inserting}
-              className="max-h-[58vh] overflow-y-auto pr-1"
+              className="min-h-0 flex-1 overflow-y-auto pr-1"
             />
           ) : (
             <MarkdownLiveEditor
@@ -182,7 +209,7 @@ export function DocumentEditorDialog({
               onChange={(content) =>
                 setDraft((previous) => (previous ? { ...previous, content } : previous))
               }
-              className="h-[56vh]"
+              className="h-full min-h-0 flex-1"
               disabled={saving || inserting}
             />
           )}

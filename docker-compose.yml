@@ -7,7 +7,8 @@ services:
     container_name: mboard
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # 由宿主机 Nginx 通过 /mboard 反向代理，避免占用公网端口
+      - "127.0.0.1:3000:3000"
 
     # 账号密钥等敏感配置从 .env 读取（先在服务器上 cp .env.example .env 并修改）
     env_file:

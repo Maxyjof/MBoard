@@ -39,7 +39,8 @@ export function CompositeCardDialog({
   const [title, setTitle] = useState("1. 新故事");
   const [fields, setFields] = useState<string[]>([...DEFAULT_FIELDS]);
   const [images, setImages] = useState<CompositeCardImage[]>([]);
-  const [docId, setDocId] = useState("");
+  const [docIds, setDocIds] = useState<string[]>([]);
+  const [docToAdd, setDocToAdd] = useState("");
   const [busy, setBusy] = useState(false);
   const editing = Boolean(initial);
 
@@ -50,7 +51,11 @@ export function CompositeCardDialog({
       initial?.fields?.length ? [...initial.fields] : [...DEFAULT_FIELDS]
     );
     setImages(initial?.images ? [...initial.images] : []);
-    setDocId(initial?.document?.id || "");
+    setDocIds(
+      initial?.documents?.map((doc) => doc.id) ||
+        (initial?.document?.id ? [initial.document.id] : [])
+    );
+    setDocToAdd("");
     setBusy(false);
   }, [open, initial]);
 
@@ -85,24 +90,27 @@ export function CompositeCardDialog({
       return;
     }
 
-    let document: CompositeCardData["document"] = null;
-    if (docId) {
+    let documents: NonNullable<CompositeCardData["documents"]> = [];
+    if (docIds.length) {
       setBusy(true);
       try {
-        const response = await fetch(`/api/documents/${docId}`);
-        const data = (await response.json()) as {
-          document?: { id: string; title: string; contentMd: string };
-          error?: string;
-        };
-        if (!response.ok || !data.document) {
-          toast.error(data.error || "读取文档失败");
+        const responses = await Promise.all(docIds.map((id) => fetch(`/api/documents/${id}`)));
+        const payloads = await Promise.all(
+          responses.map(async (response) => ({ response, data: (await response.json()) as {
+            document?: { id: string; title: string; contentMd: string };
+            error?: string;
+          } }))
+        );
+        const failed = payloads.find(({ response, data }) => !response.ok || !data.document);
+        if (failed) {
+          toast.error(failed.data.error || "读取文档失败");
           return;
         }
-        document = {
-          id: data.document.id,
-          title: data.document.title,
-          words: data.document.contentMd.replace(/\s/g, "").length,
-        };
+        documents = payloads.map(({ data }) => ({
+          id: data.document!.id,
+          title: data.document!.title,
+          words: data.document!.contentMd.replace(/\s/g, "").length,
+        }));
       } catch {
         toast.error("网络异常，读取文档失败");
         return;
@@ -115,7 +123,7 @@ export function CompositeCardDialog({
       title: nextTitle,
       fields: fields.map((field) => field.trim()).filter(Boolean),
       images,
-      document,
+      documents,
     });
     onOpenChange(false);
   }
@@ -126,7 +134,7 @@ export function CompositeCardDialog({
       onOpenChange={onOpenChange}
       size="lg"
       title={editing ? "编辑组合卡片" : "新建组合卡片"}
-      description="标题、字段和关联文档会打包成一张卡片，只能整张移动，不会散开"
+      description="标题、字段和多个关联文档会打包成一张卡片，只能整张移动，不会散开"
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
@@ -247,30 +255,54 @@ export function CompositeCardDialog({
           <label className="mb-1.5 block text-[12px] font-medium text-ink">关联文档</label>
           <div className="flex items-center gap-2">
             <select
-              value={docId}
-              onChange={(event) => setDocId(event.target.value)}
+              value={docToAdd}
+              onChange={(event) => setDocToAdd(event.target.value)}
               disabled={busy}
               className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-[13px] text-ink outline-none transition focus:border-brand"
             >
-              <option value="">不关联文档</option>
+              <option value="">选择要添加的文档</option>
               {documents.map((doc) => (
-                <option key={doc.id} value={doc.id}>
+                <option key={doc.id} value={doc.id} disabled={docIds.includes(doc.id)}>
                   {doc.title}
                 </option>
               ))}
             </select>
-            {docId && onOpenDocument ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onOpenDocument(docId)}
-                disabled={busy}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                打开
-              </Button>
-            ) : null}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (!docToAdd || docIds.includes(docToAdd)) return;
+                setDocIds((previous) => [...previous, docToAdd]);
+                setDocToAdd("");
+              }}
+              disabled={busy || !docToAdd}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              添加
+            </Button>
           </div>
+          {docIds.length ? (
+            <div className="mt-2 space-y-1.5">
+              {docIds.map((id, index) => {
+                const doc = documents.find((item) => item.id === id);
+                if (!doc) return null;
+                return (
+                  <div key={id} className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-ink">{doc.title}</span>
+                    {onOpenDocument ? (
+                      <button type="button" className="text-muted hover:text-brand" onClick={() => onOpenDocument(id)} disabled={busy} aria-label="打开文档">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                    <button type="button" className="text-muted hover:text-danger" onClick={() => setDocIds((previous) => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label="移除文档">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-faint">
             <FileText className="h-3.5 w-3.5" />
             也可以直接把画布上的文字/图片拖到卡片上，会自动变成成员

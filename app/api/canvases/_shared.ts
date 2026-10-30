@@ -52,7 +52,7 @@ export function toCanvasSummary(row: CanvasRow): CanvasSummary {
     id: row.id,
     title: row.title,
     description: row.description,
-    thumbnailUrl: row.thumbnailAssetId ? `/api/assets/${row.thumbnailAssetId}` : null,
+    thumbnailUrl: row.thumbnailAssetId ? `/mboard/api/assets/${row.thumbnailAssetId}` : null,
     version: row.version,
     lastEditor: row.lastEditor,
     createdAt: row.createdAt.toISOString(),

@@ -104,11 +104,12 @@ export async function insertSticky(api: ExcalidrawImperativeAPI, text = "双击�
       y: center.y - 70,
       width: 220,
       height: 140,
-      backgroundColor: "#ffec99",
+      backgroundColor: "#f8f9fa",
       fillStyle: "solid",
-      strokeColor: "#e8a33d",
+      strokeColor: "#adb5bd",
       strokeWidth: 1,
-      roundness: { type: 3 },
+      roughness: 0,
+      roundness: null,
       label: { text, fontSize: 16, textAlign: "center", verticalAlign: "middle" },
     },
   ]);
@@ -137,11 +138,12 @@ export async function insertShape(
       y: center.y - 60,
       width: 180,
       height: 120,
-      backgroundColor: "#d0bfff",
+      backgroundColor: "#ffffff",
       fillStyle: "solid",
-      strokeColor: "#6741d9",
-      strokeWidth: 2,
-      roundness: type === "rectangle" ? { type: 3 } : undefined,
+      strokeColor: "#868e96",
+      strokeWidth: 1,
+      roughness: 0,
+      roundness: type === "rectangle" ? null : undefined,
       label: { text: "节点", fontSize: 16, textAlign: "center", verticalAlign: "middle" },
     },
   ]);
@@ -185,15 +187,97 @@ export async function insertImage(api: ExcalidrawImperativeAPI, asset: AssetDTO,
 function docVisual(title: string, kind: "markdown" | "table") {
   const lower = title.toLowerCase();
   if (kind === "table") {
-    return { background: "#f3f0ff", stroke: "#7048e8", icon: "📊", type: "表格" };
+    return { background: "#f8f9fa", stroke: "#868e96", icon: "📊", type: "表格" };
   }
   if (lower.endsWith(".txt") || lower.endsWith(".csv")) {
     return { background: "#f8f9fa", stroke: "#868e96", icon: "📃", type: "文本文件" };
   }
   if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
-    return { background: "#e7f5ff", stroke: "#1971c2", icon: "📄", type: "Markdown 文档" };
+    return { background: "#f8f9fa", stroke: "#868e96", icon: "📄", type: "Markdown 文档" };
   }
-  return { background: "#eef2ff", stroke: "#4c6ef5", icon: "📄", type: "文档" };
+  return { background: "#f8f9fa", stroke: "#868e96", icon: "📄", type: "文档" };
+}
+
+type InsertTable = { headers: string[]; rows: string[][] };
+
+function parseTableForCanvas(markdown: string): InsertTable {
+  const lines = markdown
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const split = (line: string) => {
+    let value = line;
+    if (value.startsWith("|")) value = value.slice(1);
+    if (value.endsWith("|")) value = value.slice(0, -1);
+    return value.split("|").map((cell) => cell.trim().replace(/\\\|/g, "|"));
+  };
+  if (lines.length >= 2) {
+    const headers = split(lines[0]);
+    const divider = split(lines[1]);
+    if (headers.length && divider.every((cell) => /^:?-{2,}:?$/.test(cell))) {
+      return {
+        headers,
+        rows: lines.slice(2).map((line) => {
+          const cells = split(line);
+          return headers.map((_, index) => cells[index] ?? "");
+        }),
+      };
+    }
+  }
+  return { headers: ["列 1", "列 2", "列 3"], rows: [["", "", ""], ["", "", ""]] };
+}
+
+export async function insertTableCard(
+  api: ExcalidrawImperativeAPI,
+  doc: Pick<DocumentDTO, "id" | "title" | "contentMd">,
+  fixedCenter?: { x: number; y: number }
+) {
+  const table = parseTableForCanvas(doc.contentMd);
+  const columnWidth = 150;
+  const rowHeight = 42;
+  const width = table.headers.length * columnWidth;
+  const height = (table.rows.length + 1) * rowHeight;
+  const center = fixedCenter || cascadeCenter(api, width, height);
+  const svg = renderTableSvg(table, width, height, columnWidth, rowHeight);
+  const fileId = crypto.randomUUID();
+  api.addFiles([{ id: fileId, dataURL: svgDataURL(svg), mimeType: "image/svg+xml", created: Date.now(), lastRetrieved: Date.now() } as any]);
+  const elements = await build([{ type: "image", fileId, x: center.x - width / 2, y: center.y - height / 2, width, height }]);
+  appendElements(api, elements, { mbTableId: doc.id, mbTableTitle: doc.title });
+}
+
+function renderTableSvg(table: InsertTable, width: number, height: number, columnWidth: number, rowHeight: number) {
+  const esc = escapeXml;
+  const rows = [table.headers, ...table.rows];
+  const cells = rows.flatMap((row, rowIndex) => row.map((cell, col) => {
+    const x = col * columnWidth;
+    const y = rowIndex * rowHeight;
+    const fill = rowIndex === 0 ? "#f1f3f5" : "#ffffff";
+    return `<rect x="${x}" y="${y}" width="${columnWidth}" height="${rowHeight}" fill="${fill}" stroke="#adb5bd" stroke-width="1"/><text x="${x + 12}" y="${y + 26}" font-family="Arial, sans-serif" font-size="14" fill="#343a40">${esc(cell)}</text>`;
+  }).join(""));
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#ffffff"/>${cells}</svg>`;
+}
+
+// 保存表格文档后，用最新 Markdown 重建画布中的原表格，保持原来的中心位置。
+export async function updateTableCard(
+  api: ExcalidrawImperativeAPI,
+  doc: Pick<DocumentDTO, "id" | "title" | "contentMd">
+): Promise<boolean> {
+  const current = api.getSceneElements() as any[];
+  const tableElements = current.filter((element) => element.customData?.mbTableId === doc.id);
+  if (!tableElements.length) return false;
+
+  const left = Math.min(...tableElements.map((element) => element.x));
+  const top = Math.min(...tableElements.map((element) => element.y));
+  const right = Math.max(...tableElements.map((element) => element.x + element.width));
+  const bottom = Math.max(...tableElements.map((element) => element.y + element.height));
+  const center = { x: (left + right) / 2, y: (top + bottom) / 2 };
+
+  api.updateScene({
+    elements: current.filter((element) => element.customData?.mbTableId !== doc.id) as any,
+    captureUpdate: "IMMEDIATELY",
+  });
+  await insertTableCard(api, doc, center);
+  return true;
 }
 
 // 文件卡片外观：与便签明显区分，并标出文件类型
@@ -214,11 +298,50 @@ function fileVisual(filename: string, mimeType: string) {
   return { background: "#f8f9fa", stroke: "#868e96", icon: "📎", type: "文件" };
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function svgDataURL(svg: string): string {
+  const bytes = new TextEncoder().encode(svg);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
+}
+
+function renderFileCard(asset: AssetDTO) {
+  const visual = fileVisual(asset.filename, asset.mimeType);
+  const width = 320;
+  const height = 220;
+  const title = asset.filename.length > 28 ? `${asset.filename.slice(0, 25)}…` : asset.filename;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect width="320" height="220" fill="#ffffff"/>
+    <g transform="translate(112 8) scale(.094)">
+      <path d="M792.3712 342.7328L608.256 165.2736c-8.6016-8.2944-20.0704-12.9024-32.1536-12.9024l-289.28-0.6144s-69.0176 4.5056-69.0176 67.584v585.4208s3.072 67.584 69.0176 67.584h450.3552s69.0176-3.1744 69.0176-67.584V374.8864c0-12.0832-5.0176-23.6544-13.824-32.1536zM609.1776 228.2496l120.6272 117.1456h-97.6896s-23.04-1.024-23.04-22.528c0.1024-21.504 0.1024-94.6176 0.1024-94.6176z m151.04 576.4096c0 22.6304-23.04 22.528-23.04 22.528H286.8224c-21.504 0-23.04-22.528-23.04-22.528V219.2384c0-20.992 23.04-22.528 23.04-22.528H563.2v126.0544c0 62.464 69.0176 67.584 69.0176 67.584h128v414.3104z" fill="#343a40"/>
+      <path d="M365.3632 477.5936c0 12.4928 10.3424 22.528 23.04 22.528h248.32c12.6976 0 23.04-10.1376 23.04-22.528s-10.3424-22.528-23.04-22.528H388.4032c-12.6976 0-23.04 10.1376-23.04 22.528zM636.7232 568.7296H388.4032c-12.6976 0-23.04 10.1376-23.04 22.528s10.3424 22.528 23.04 22.528h248.32c12.6976 0 23.04-10.1376 23.04-22.528s-10.3424-22.528-23.04-22.528zM636.7232 682.3936H388.4032c-12.6976 0-23.04 10.1376-23.04 22.528s10.3424 22.528 23.04 22.528h248.32c12.6976 0 23.04-10.1376 23.04-22.528s-10.3424-22.528-23.04-22.528z" fill="#343a40"/>
+    </g>
+    <text x="160" y="174" text-anchor="middle" font-size="15" font-weight="600" fill="#343a40" font-family="Arial, sans-serif">${escapeXml(title)}</text>
+    <text x="160" y="196" text-anchor="middle" font-size="12" fill="#868e96" font-family="Arial, sans-serif">${escapeXml(visual.type)}</text>
+  </svg>`;
+  return { dataURL: svgDataURL(svg), width, height };
+}
+
 // 插入文档卡片（Markdown / 表格 / 纯文本统一走文档）
 export async function insertDocCard(
   api: ExcalidrawImperativeAPI,
-  doc: Pick<DocumentDTO, "id" | "title" | "kind">
+  doc: Pick<DocumentDTO, "id" | "title" | "kind" | "contentMd">
 ) {
+  if (doc.kind === "table") {
+    await insertTableCard(api, doc);
+    return;
+  }
   const center = cascadeCenter(api, 280, 120);
   const visual = docVisual(doc.title, doc.kind);
   const elements = await build([
@@ -232,7 +355,8 @@ export async function insertDocCard(
       fillStyle: "solid",
       strokeColor: visual.stroke,
       strokeWidth: 1.5,
-      roundness: { type: 3 },
+      roundness: null,
+      roughness: 0,
       label: {
         text: `${visual.icon} ${doc.title}\n${visual.type} · 点击打开`,
         fontSize: 14,
@@ -251,29 +375,28 @@ export async function insertDocCard(
 
 // 插入 PDF / Office 等不可编辑文件卡片
 export async function insertFileCard(api: ExcalidrawImperativeAPI, asset: AssetDTO) {
-  const center = cascadeCenter(api, 280, 120);
-  const visual = fileVisual(asset.filename, asset.mimeType);
+  const rendered = renderFileCard(asset);
+  const center = cascadeCenter(api, rendered.width, rendered.height);
+  const fileId = crypto.randomUUID();
+  api.addFiles([
+    {
+      id: fileId,
+      dataURL: rendered.dataURL,
+      mimeType: "image/svg+xml",
+      created: Date.now(),
+      lastRetrieved: Date.now(),
+    } as any,
+  ]);
   const elements = await build([
     {
-      type: "rectangle",
-      x: center.x - 140,
-      y: center.y - 60,
-      width: 280,
-      height: 120,
-      backgroundColor: visual.background,
-      fillStyle: "solid",
-      strokeColor: visual.stroke,
-      strokeWidth: 1.5,
-      roundness: { type: 3 },
-      label: {
-        text: `${visual.icon} ${asset.filename}\n${visual.type} · 点击打开`,
-        fontSize: 14,
-        textAlign: "left",
-        verticalAlign: "middle",
-      },
+      type: "image",
+      fileId,
+      x: center.x - rendered.width / 2,
+      y: center.y - rendered.height / 2,
+      width: rendered.width,
+      height: rendered.height,
     },
   ]);
-
   appendElements(api, elements, {
     mbFileAssetId: asset.id,
     mbFileName: asset.filename,
@@ -295,7 +418,8 @@ export async function insertVideoCard(api: ExcalidrawImperativeAPI, asset: Asset
       fillStyle: "solid",
       strokeColor: "#495057",
       strokeWidth: 2,
-      roundness: { type: 3 },
+      roundness: null,
+      roughness: 0,
       label: {
         text: `▶ ${asset.filename}\n选中后可在右侧播放`,
         fontSize: 14,
@@ -644,7 +768,8 @@ export async function groupSelectedElements(api: ExcalidrawImperativeAPI): Promi
       fillStyle: "solid",
       strokeColor: "#ced4da",
       strokeWidth: 1.5,
-      roundness: { type: 3 },
+      roughness: 0,
+      roundness: null,
     },
     {
       type: "text",

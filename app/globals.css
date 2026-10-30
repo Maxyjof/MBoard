@@ -286,3 +286,75 @@
   color: rgb(var(--muted));
 }
 
+/* Vditor 文档编辑器与 MBoard 视觉系统统一 */
+.vditor-mb.vditor {
+  --textarea-bg: rgb(var(--surface));
+  --textarea-text-color: rgb(var(--ink));
+  --toolbar-background: rgb(var(--surface-2));
+  --toolbar-icon-color: rgb(var(--muted));
+  --toolbar-icon-hover-color: rgb(var(--ink));
+  --border-color: rgb(var(--line));
+  --panel-background-color: rgb(var(--surface));
+  --second-color: rgb(var(--muted));
+  --tooltip-background-color: rgb(var(--elevated));
+  border: 0;
+  background: rgb(var(--surface));
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+
+.vditor-mb .vditor-toolbar {
+  border-bottom: 1px solid rgb(var(--line));
+  background: rgb(var(--surface-2) / 0.6);
+  padding: 6px 8px;
+}
+
+.vditor-mb .vditor-content {
+  background: rgb(var(--surface));
+  min-height: 0;
+  height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.vditor-mb .vditor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.vditor-mb .vditor-outline {
+  background: rgb(var(--surface));
+  border-right: 1px solid rgb(var(--line));
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  flex: 0 0 250px;
+}
+
+.vditor-mb .vditor-wysiwyg,
+.vditor-mb .vditor-wysiwyg pre.vditor-reset {
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.vditor-mb .vditor-wysiwyg {
+  height: 100%;
+  overflow: hidden;
+}
+
+.vditor-mb .vditor-wysiwyg pre.vditor-reset {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.vditor-mb .vditor-ir pre.vditor-reset,
+.vditor-mb .vditor-wysiwyg pre.vditor-reset,
+.vditor-mb .vditor-sv .vditor-reset {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+

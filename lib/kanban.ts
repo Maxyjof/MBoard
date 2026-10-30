@@ -211,7 +211,7 @@ export function toAttachmentDTO(record: AttachmentRecord): AttachmentDTO {
     mimeType: record.asset.mimeType,
     size: record.asset.size,
     kind: record.asset.kind,
-    url: `/api/assets/${record.assetId}`,
+    url: `/mboard/api/assets/${record.assetId}`,
   };
 }
 

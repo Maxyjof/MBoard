@@ -11,10 +11,11 @@ type DropdownProps = {
   align?: "start" | "end";
   width?: number;
   className?: string;
+  placement?: "bottom" | "top";
 };
 
 // 下拉菜单：点击触发器展开，点击外部/Esc 关闭
-export function Dropdown({ trigger, children, align = "end", width = 190, className }: DropdownProps) {
+export function Dropdown({ trigger, children, align = "end", width = 190, className, placement = "bottom" }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -55,7 +56,8 @@ export function Dropdown({ trigger, children, align = "end", width = 190, classN
           role="menu"
           style={{ width }}
           className={cn(
-            "absolute top-full z-50 mt-1.5 rounded-xl border border-line bg-elevated p-1 shadow-float animate-scale-in",
+            "absolute z-50 rounded-xl border border-line bg-elevated p-1 shadow-float animate-scale-in",
+            placement === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5",
             align === "end" ? "right-0" : "left-0"
           )}
           onClick={() => setOpen(false)}

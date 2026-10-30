@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 部署在现有站点的 /mboard 子路径下。
+  basePath: "/mboard",
   // 画布内含大量交互与 WebSocket 连接，关闭严格模式避免开发环境重复挂载
   reactStrictMode: false,
   poweredByHeader: false,

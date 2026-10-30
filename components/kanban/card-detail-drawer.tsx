@@ -1,6 +1,6 @@
 "use client";
 
-// 卡片详情右侧抽屉：标题、标签、截止日期、Markdown 描述、附件、归档与删除
+// 卡片详情居中大面板：标题、标签、截止日期、Markdown 描述、附件、归档与删除
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -21,6 +21,7 @@ import { AssigneePicker } from "@/components/kanban/assignee-picker";
 import { AttachmentList } from "@/components/kanban/attachment-list";
 import { LabelPicker } from "@/components/kanban/label-picker";
 import { MarkdownView } from "@/components/kanban/markdown-view";
+import { MarkdownLiveEditor } from "@/components/canvas/markdown-live-editor";
 import {
   deleteCard,
   errorMessage,
@@ -199,11 +200,11 @@ export function CardDetailDrawer({
         onClick={onClose}
       />
 
-      <aside
+      <div
         role="dialog"
         aria-modal="true"
         aria-label="卡片详情"
-        className="absolute inset-y-0 right-0 flex w-full flex-col border-l border-line bg-elevated shadow-float animate-fade-in sm:max-w-[540px]"
+        className="relative mx-auto flex h-[min(92vh,920px)] w-[min(1180px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl border border-line bg-elevated shadow-float animate-scale-in"
       >
         <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
           <span className="text-[12.5px] font-medium text-muted">卡片详情</span>
@@ -212,7 +213,7 @@ export function CardDetailDrawer({
           </button>
         </header>
 
-        <div className="scroll-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="scroll-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5 sm:px-8">
           <Input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -334,20 +335,12 @@ export function CardDetailDrawer({
             </div>
 
             {tab === "edit" ? (
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                    event.preventDefault();
-                    void saveDescription();
-                  }
-                }}
-                placeholder="支持 Markdown：标题、列表、表格、代码块…"
-                rows={8}
-                maxLength={50_000}
+              <MarkdownLiveEditor
+                key={`${card.id}-description`}
+                initialValue={description}
+                onChange={setDescription}
                 disabled={busy}
-                className="field min-h-[180px] resize-y font-mono text-[12.5px] leading-6"
+                className="h-[420px] min-h-[320px]"
               />
             ) : (
               <div className="min-h-[120px] rounded-xl border border-line bg-surface px-3 py-2.5">
@@ -407,7 +400,7 @@ export function CardDetailDrawer({
             关闭
           </Button>
         </footer>
-      </aside>
+      </div>
 
       <ConfirmDialog
         open={confirmDelete}
