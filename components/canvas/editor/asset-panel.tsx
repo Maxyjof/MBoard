@@ -11,6 +11,7 @@ import {
   Download,
   FileText,
   FileUp,
+  Frame,
   Image as ImageIcon,
   LayoutPanelTop,
   Loader2,
@@ -50,6 +51,7 @@ import {
   insertCompositeCard,
   insertDocCard,
   insertFileCard,
+  insertFrame,
   insertImage,
   insertShape,
   insertSticky,
@@ -539,6 +541,16 @@ export function AssetPanel({
                 onClick={() => void createTableDoc()}
               />
               <InsertTile
+                label="画框"
+                icon={<Frame />}
+                onClick={() =>
+                  withApi((api) => {
+                    insertFrame(api);
+                    toast.success("画框已插入，把图片/文本拖进来即可自动收纳");
+                  })
+                }
+              />
+              <InsertTile
                 label="组合卡片"
                 icon={<LayoutPanelTop />}
                 onClick={() => setCompositeOpen(true)}
@@ -594,7 +606,7 @@ export function AssetPanel({
             </div>
 
             <p className="px-1 text-[11px] leading-5 text-faint">
-              提示：文档/文件卡片单击即可打开；「组合卡片」是带标题和字段的故事卡；「分组」用来把任意元素打包移动。
+              提示：文档/文件卡片单击即可打开；「画框」拖入图片/文本会自动收纳；「组合卡片」是带标题和字段的故事卡；「分组」用来把任意元素打包移动。
             </p>
           </div>
         ) : (

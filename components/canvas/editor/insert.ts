@@ -304,6 +304,81 @@ export async function insertVideoCard(api: ExcalidrawImperativeAPI, asset: Asset
   appendElements(api, elements, { mbVideoAssetId: asset.id, mbVideoName: asset.filename });
 }
 
+// 把元素上的 frameId 回写到画框 children，保证画框移动时子元素跟着走
+export function syncFrameChildren(api: ExcalidrawImperativeAPI): boolean {
+  const elements = api.getSceneElements();
+  let changed = false;
+
+  const next = elements.map((element: any) => {
+    if (element.type !== "frame") return element;
+    const childIds = elements
+      .filter((item: any) => item.type !== "frame" && item.frameId === element.id)
+      .map((item: any) => item.id);
+    const current = Array.isArray(element.children) ? element.children : [];
+    const same =
+      current.length === childIds.length &&
+      current.every((id: string, index: number) => id === childIds[index]);
+    if (same) return element;
+    changed = true;
+    return {
+      ...element,
+      children: childIds,
+      version: element.version + 1,
+      versionNonce: Math.floor(Math.random() * 2 ** 31),
+    };
+  });
+
+  if (changed) {
+    api.updateScene({
+      elements: next as any,
+      captureUpdate: "NEVER",
+    });
+  }
+  return changed;
+}
+
+// 插入原生画框：内部组件数量不限，拖入的图片/文本会自动成为画框成员
+export function insertFrame(api: ExcalidrawImperativeAPI) {
+  const width = 760;
+  const height = 520;
+  const center = cascadeCenter(api, width, height);
+  const frame: any = {
+    id: crypto.randomUUID(),
+    type: "frame",
+    x: center.x - width / 2,
+    y: center.y - height / 2,
+    width,
+    height,
+    angle: 0,
+    strokeColor: "#ced4da",
+    backgroundColor: "transparent",
+    fillStyle: "solid",
+    strokeWidth: 1,
+    strokeStyle: "solid",
+    roughness: 1,
+    opacity: 100,
+    groupIds: [],
+    frameId: null,
+    roundness: null,
+    seed: Math.floor(Math.random() * 2 ** 31),
+    version: 1,
+    versionNonce: Math.floor(Math.random() * 2 ** 31),
+    isDeleted: false,
+    boundElements: null,
+    updated: Date.now(),
+    link: null,
+    locked: false,
+    name: "新画框",
+    children: [],
+  };
+
+  api.updateScene({
+    elements: [...api.getSceneElements(), frame] as any,
+    appState: { selectedElementIds: { [frame.id]: true } } as any,
+    captureUpdate: "IMMEDIATELY",
+  });
+}
+
 // 组合卡片：标题 + 字段列表 + 关联文档，整体作为一个分组移动
 export type CompositeCardInput = {
   title: string;

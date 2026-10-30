@@ -34,7 +34,7 @@ import type { AppUser, DocumentDTO, SceneData } from "@/lib/types";
 import { CollabConnection, type CollabStatus } from "@/lib/collab/client";
 import { SceneBinding } from "./scene-binding";
 import { fetchAssetDataURL, hydrateSceneFiles, uploadAsset } from "./scene-assets";
-import { insertDocCard, insertFileCard, insertVideoCard } from "./insert";
+import { insertDocCard, insertFileCard, insertVideoCard, syncFrameChildren } from "./insert";
 import {
   AssetPanel,
   type CanvasSelection,
@@ -420,6 +420,9 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
           scheduleRemoteApplyRef.current?.();
         }
 
+        // 拖拽结束后同步画框 children，保证子元素随画框移动
+        syncFrameChildren(api);
+
         // 自己判断单击：位移小且时间短；拖拽/框选/缩放不会触发
         const press = canvasPressRef.current;
         canvasPressRef.current = null;
@@ -798,6 +801,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       startX: number;
       startY: number;
       moved: boolean;
+      childIds: string[];
       initial: Map<string, { x: number; y: number }>;
     } | null = null;
 
@@ -863,6 +867,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
           ...element,
           x: start.x + deltaX,
           y: start.y + deltaY,
+          ...(element.id === drag?.frameId ? { children: drag?.childIds } : {}),
           version: element.version + 1,
           versionNonce: Math.floor(Math.random() * 2 ** 31),
         };
@@ -881,6 +886,8 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       drag = null;
       window.removeEventListener("pointermove", handlePointerMove, true);
       window.removeEventListener("pointerup", handlePointerUp, true);
+      const api = apiRef.current;
+      if (api) syncFrameChildren(api);
     }
 
     function handlePointerDown(event: PointerEvent) {
@@ -901,7 +908,16 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       lastCanvasHitRef.current = null;
 
       const elements = api.getSceneElements();
-      const ids = [frame.id, ...(Array.isArray(frame.children) ? frame.children : [])];
+      const childIds = elements
+        .filter((item: any) => item.type !== "frame" && item.frameId === frame.id)
+        .map((item: any) => item.id);
+      const ids = [
+        frame.id,
+        ...new Set<string>([
+          ...(Array.isArray(frame.children) ? frame.children : []),
+          ...childIds,
+        ]),
+      ];
       const initial = new Map<string, { x: number; y: number }>();
       for (const id of ids) {
         const element = elements.find((item: any) => item.id === id);
@@ -913,6 +929,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         startX: point.x,
         startY: point.y,
         moved: false,
+        childIds,
         initial,
       };
 
