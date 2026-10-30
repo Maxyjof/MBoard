@@ -47,6 +47,8 @@
 
 ![文档实时编辑](docs/screenshots/doc-editor.png)
 
+![选中文档自动预览](docs/screenshots/doc-inline.png)
+
 ![表格可视化编辑](docs/screenshots/table-editor.png)
 
 ### 实时协作
