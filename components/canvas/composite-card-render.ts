@@ -5,9 +5,16 @@ export type CompositeCardDocument = {
   words?: number;
 };
 
+export type CompositeCardImage = {
+  dataURL: string;
+  width: number;
+  height: number;
+};
+
 export type CompositeCardData = {
   title: string;
   fields: string[];
+  images?: CompositeCardImage[];
   document?: CompositeCardDocument | null;
 };
 
@@ -26,8 +33,12 @@ function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
-export function compositeCardHeight(fields: number, hasDocument: boolean): number {
-  return 100 + fields * 64 + (hasDocument ? 84 : 0) + 20;
+export function compositeCardHeight(
+  fields: number,
+  hasDocument: boolean,
+  images = 0
+): number {
+  return 100 + fields * 64 + images * 142 + (hasDocument ? 84 : 0) + 20;
 }
 
 export function renderCompositeCard(data: CompositeCardData): {
@@ -38,9 +49,12 @@ export function renderCompositeCard(data: CompositeCardData): {
 } {
   const width = COMPOSITE_CARD_WIDTH;
   const fields = data.fields.filter((field) => field.trim());
+  const images = data.images || [];
   const hasDocument = Boolean(data.document);
-  const height = compositeCardHeight(fields.length, hasDocument);
-  const meta = `${fields.length} 个字段${hasDocument ? " · 1 个文档" : ""}`;
+  const height = compositeCardHeight(fields.length, hasDocument, images.length);
+  const meta = `${fields.length} 个字段${images.length ? ` · ${images.length} 张图片` : ""}${
+    hasDocument ? " · 1 个文档" : ""
+  }`;
   const rows: string[] = [];
 
   fields.forEach((field, index) => {
@@ -51,8 +65,18 @@ export function renderCompositeCard(data: CompositeCardData): {
     `);
   });
 
+  images.forEach((image, index) => {
+    const rowY = 96 + fields.length * 64 + index * 142;
+    rows.push(`
+      <rect x="20" y="${rowY}" width="${width - 40}" height="130" rx="8" fill="#ffffff" stroke="#e9ecef" stroke-width="1"/>
+      <image x="28" y="${rowY + 8}" width="${width - 56}" height="114" preserveAspectRatio="xMidYMid meet" href="${escapeXml(
+        image.dataURL
+      )}"/>
+    `);
+  });
+
   if (data.document) {
-    const docY = 96 + fields.length * 64 + 8;
+    const docY = 96 + fields.length * 64 + images.length * 142 + 8;
     rows.push(`
       <rect x="20" y="${docY}" width="${width - 40}" height="64" rx="8" fill="#f8f9fa" stroke="#e9ecef" stroke-width="1"/>
       <g transform="translate(36 ${docY + 16})">

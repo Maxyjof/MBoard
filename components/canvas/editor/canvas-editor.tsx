@@ -34,7 +34,14 @@ import type { AppUser, DocumentDTO, SceneData } from "@/lib/types";
 import { CollabConnection, type CollabStatus } from "@/lib/collab/client";
 import { SceneBinding } from "./scene-binding";
 import { fetchAssetDataURL, hydrateSceneFiles, uploadAsset } from "./scene-assets";
-import { insertDocCard, insertFileCard, insertVideoCard, migrateCompositeCards, syncFrameChildren } from "./insert";
+import {
+  absorbElementIntoCompositeCard,
+  insertDocCard,
+  insertFileCard,
+  insertVideoCard,
+  migrateCompositeCards,
+  syncFrameChildren,
+} from "./insert";
 import { parseCompositeCardData, type CompositeCardData } from "@/components/canvas/composite-card-render";
 import {
   AssetPanel,
@@ -115,6 +122,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
     composite?: CompositeCardData;
   } | null>(null);
   const compositeMigratedRef = useRef(false);
+  const pressedElementIdRef = useRef<string | null>(null);
   const canvasPressRef = useRef<{
     hit: {
       kind: "doc" | "video" | "file" | "composite";
@@ -412,6 +420,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         // 记录这次点击命中的卡片，双击时用它判断目标
         // 只取鼠标最上层的命中元素，避免重叠卡片时优先打开下层文档
         const hitElement = pointerDownState.hit.element as any;
+        pressedElementIdRef.current = hitElement?.id ?? null;
         const docElement = hitElement?.customData?.mbDocId ? hitElement : null;
         const videoElement = hitElement?.customData?.mbVideoAssetId ? hitElement : null;
         const fileElement = hitElement?.customData?.mbFileAssetId ? hitElement : null;
@@ -457,12 +466,46 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         // 自己判断单击：位移小且时间短；拖拽/框选/缩放不会触发
         const press = canvasPressRef.current;
         canvasPressRef.current = null;
-        if (!press?.hit || event.button !== 0) return;
+        const pressedId = pressedElementIdRef.current;
+        pressedElementIdRef.current = null;
+        if (event.button !== 0) return;
 
-        const distance = Math.hypot(event.clientX - press.x, event.clientY - press.y);
-        if (distance < 5 && Date.now() - press.time < 600) {
+        const distance = press
+          ? Math.hypot(event.clientX - press.x, event.clientY - press.y)
+          : Number.POSITIVE_INFINITY;
+        if (press?.hit && distance < 5 && Date.now() - press.time < 600) {
           setPanelOpen(true);
           setOpenRequest({ ...press.hit, seq: Date.now() });
+          return;
+        }
+
+        // 拖拽文字/图片到组合卡片上时，直接吸收成卡片成员
+        if (distance >= 5 && pressedId) {
+          const state = api.getAppState();
+          const zoom = state.zoom?.value ?? 1;
+          const sceneX = (event.clientX - (state.offsetLeft || 0)) / zoom - state.scrollX;
+          const sceneY = (event.clientY - (state.offsetTop || 0)) / zoom - state.scrollY;
+          const source = api
+            .getSceneElements()
+            .find((element: any) => element.id === pressedId) as any;
+          if (source && !source.customData?.mbComposite) {
+            const card = api
+              .getSceneElements()
+              .filter(
+                (element: any) =>
+                  element.customData?.mbComposite &&
+                  sceneX >= element.x &&
+                  sceneX <= element.x + element.width &&
+                  sceneY >= element.y &&
+                  sceneY <= element.y + element.height
+              )
+              .sort((a: any, b: any) => a.width * a.height - b.width * b.height)[0] as any;
+            if (card && card.id !== pressedId) {
+              void absorbElementIntoCompositeCard(api, card.id, pressedId).then((absorbed) => {
+                if (absorbed) toast.success("已加入组合卡片");
+              });
+            }
+          }
         }
       });
 

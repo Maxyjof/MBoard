@@ -3,6 +3,7 @@
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { AssetDTO, DocumentDTO } from "@/lib/types";
 import {
+  parseCompositeCardData,
   renderCompositeCard,
   type CompositeCardData,
 } from "@/components/canvas/composite-card-render";
@@ -484,6 +485,59 @@ export async function updateCompositeCard(
   });
 
   api.updateScene({ elements: next as any, captureUpdate: "IMMEDIATELY" });
+  return true;
+}
+
+// 把画布上的文字或图片收进组合卡片，吸收后原元素删除
+export async function absorbElementIntoCompositeCard(
+  api: ExcalidrawImperativeAPI,
+  cardId: string,
+  elementId: string
+): Promise<boolean> {
+  const elements = api.getSceneElements();
+  const card = elements.find((element: any) => element.id === cardId) as any;
+  const source = elements.find((element: any) => element.id === elementId) as any;
+  if (!card || !source || card.id === source.id) return false;
+  if (!card.customData?.mbComposite) return false;
+  if (source.groupIds?.length) return false;
+
+  const data = parseCompositeCardData(card.customData);
+  if (!data) return false;
+
+  const next: CompositeCardData = {
+    ...data,
+    fields: [...(data.fields || [])],
+    images: [...(data.images || [])],
+  };
+
+  if (source.type === "text") {
+    const value = (source.text || "").trim();
+    if (!value) return false;
+    next.fields = [...next.fields, value];
+  } else if (source.type === "image") {
+    const files = api.getFiles ? api.getFiles() : {};
+    const file = files?.[source.fileId];
+    if (!file?.dataURL) return false;
+    next.images = [
+      ...(next.images || []),
+      {
+        dataURL: file.dataURL,
+        width: source.width,
+        height: source.height,
+      },
+    ];
+  } else {
+    return false;
+  }
+
+  await updateCompositeCard(api, cardId, next);
+
+  api.updateScene({
+    elements: api
+      .getSceneElements()
+      .filter((element: any) => element.id !== elementId) as any,
+    captureUpdate: "IMMEDIATELY",
+  });
   return true;
 }
 

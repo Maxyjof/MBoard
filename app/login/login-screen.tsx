@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, LayoutGrid, Loader2, PenLine, Sparkles, Users, Wand2 } from "lucide-react";
+import { Eye, EyeOff, LayoutGrid, PenLine, Sparkles, Users, Wand2 } from "lucide-react";
 import { BrandMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 

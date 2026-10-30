@@ -6,7 +6,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import type { CompositeCardData } from "@/components/canvas/composite-card-render";
+import type {
+  CompositeCardData,
+  CompositeCardImage,
+} from "@/components/canvas/composite-card-render";
 
 type PanelDocument = {
   id: string;
@@ -35,6 +38,7 @@ export function CompositeCardDialog({
 }: CompositeCardDialogProps) {
   const [title, setTitle] = useState("1. 新故事");
   const [fields, setFields] = useState<string[]>([...DEFAULT_FIELDS]);
+  const [images, setImages] = useState<CompositeCardImage[]>([]);
   const [docId, setDocId] = useState("");
   const [busy, setBusy] = useState(false);
   const editing = Boolean(initial);
@@ -45,6 +49,7 @@ export function CompositeCardDialog({
     setFields(
       initial?.fields?.length ? [...initial.fields] : [...DEFAULT_FIELDS]
     );
+    setImages(initial?.images ? [...initial.images] : []);
     setDocId(initial?.document?.id || "");
     setBusy(false);
   }, [open, initial]);
@@ -109,6 +114,7 @@ export function CompositeCardDialog({
     onSubmit({
       title: nextTitle,
       fields: fields.map((field) => field.trim()).filter(Boolean),
+      images,
       document,
     });
     onOpenChange(false);
@@ -203,6 +209,40 @@ export function CompositeCardDialog({
           </div>
         </div>
 
+        {images.length > 0 ? (
+          <div>
+            <label className="mb-1.5 block text-[12px] font-medium text-ink">图片成员</label>
+            <div className="grid grid-cols-3 gap-2">
+              {images.map((image, index) => (
+                <div
+                  key={`${image.dataURL.slice(0, 24)}-${index}`}
+                  className="group relative overflow-hidden rounded-lg border border-line bg-white"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image.dataURL}
+                    alt="组合卡片图片成员"
+                    className="h-20 w-full object-contain"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setImages((previous) =>
+                        previous.filter((_, itemIndex) => itemIndex !== index)
+                      )
+                    }
+                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-md bg-black/55 text-white opacity-0 transition group-hover:opacity-100"
+                    aria-label="删除图片成员"
+                    disabled={busy}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div>
           <label className="mb-1.5 block text-[12px] font-medium text-ink">关联文档</label>
           <div className="flex items-center gap-2">
@@ -233,7 +273,7 @@ export function CompositeCardDialog({
           </div>
           <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-faint">
             <FileText className="h-3.5 w-3.5" />
-            关联后卡片底部显示文档条目，点卡片后可在这里继续编辑
+            也可以直接把画布上的文字/图片拖到卡片上，会自动变成成员
           </p>
         </div>
       </div>
