@@ -38,7 +38,14 @@ export async function POST(request: Request) {
     try {
       const row = await prisma.document.create({
         data: parsed.data,
-        select: { id: true, title: true, contentMd: true, createdAt: true, updatedAt: true },
+        select: {
+          id: true,
+          title: true,
+          contentMd: true,
+          kind: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       });
       return ok({ document: toDocumentDTO(row) }, { status: 201 });
     } catch (error) {

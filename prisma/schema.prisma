@@ -107,6 +107,8 @@ model Document {
   id        String   @id @default(cuid())
   title     String
   contentMd String
+  /// markdown = 普通文档，table = 可视化表格（正文仍是 Markdown 表格）
+  kind      String   @default("markdown")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

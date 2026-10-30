@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import {
   ArrowUpRight,
@@ -10,7 +11,6 @@ import {
   FileUp,
   Image as ImageIcon,
   Loader2,
-  Pencil,
   Plus,
   RectangleHorizontal,
   Search,
@@ -24,12 +24,21 @@ import {
 } from "lucide-react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MarkdownView } from "@/components/canvas/markdown-view";
 import { cn, relativeTime } from "@/lib/utils";
-import type { AssetDTO, DocumentDTO } from "@/lib/types";
+import type { DocumentDTO } from "@/lib/types";
+
+// CodeMirror 编辑器体积较大，只在打开文档时按需加载
+const DocumentEditorDialog = dynamic(
+  () =>
+    import("@/components/canvas/document-editor-dialog").then(
+      (module) => module.DocumentEditorDialog
+    ),
+  { ssr: false }
+);
 import {
   activateTool,
   insertDocCard,
@@ -50,10 +59,17 @@ export type CanvasSelection = {
   videoName?: string;
 };
 
+export type OpenElementRequest = {
+  kind: "doc" | "video";
+  id: string;
+  seq: number;
+};
+
 type AssetPanelProps = {
   canvasId: string;
   apiRef: React.RefObject<ExcalidrawImperativeAPI | null>;
   selection: CanvasSelection | null;
+  openRequest?: OpenElementRequest | null;
   onClose: () => void;
 };
 
@@ -64,26 +80,34 @@ const TABLE_TEMPLATE = `| 项目 | 负责人 | 状态 |
 | 联调验收 |  | 待开始 |
 `;
 
-// 右侧面板：插入组件 + 文档库
-export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelProps) {
+// 右侧面板：插入组件 + 文档库 + 选中元素预览
+export function AssetPanel({
+  canvasId,
+  apiRef,
+  selection,
+  openRequest,
+  onClose,
+}: AssetPanelProps) {
   const [tab, setTab] = useState<"insert" | "docs">("insert");
   const [docs, setDocs] = useState<DocListItem[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
-  // 文档预览 / 编辑
+  // 文档编辑弹窗
   const [activeDoc, setActiveDoc] = useState<DocumentDTO | null>(null);
-  const [docMode, setDocMode] = useState<"view" | "edit">("view");
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftContent, setDraftContent] = useState("");
-  const [savingDoc, setSavingDoc] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  // 选中画布文档卡片时的内联预览
+  const [previewDoc, setPreviewDoc] = useState<DocumentDTO | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewDocIdRef = useRef<string | null>(null);
 
   // 删除确认
   const [deleteTarget, setDeleteTarget] = useState<DocListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // 选中元素的预览弹层
+  // 选中元素的视频播放
   const [videoOpen, setVideoOpen] = useState<string | null>(null);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -126,6 +150,53 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
     Promise.resolve(action(api)).catch(() => toast.error("操作失败，请重试"));
   };
 
+  // 双击画布卡片时由画布父组件触发
+  useEffect(() => {
+    if (!openRequest) return;
+    setTab("docs");
+    if (openRequest.kind === "doc") {
+      void openDoc(openRequest.id);
+    } else {
+      setVideoOpen(openRequest.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRequest?.seq]);
+
+  // 选中文档卡片：自动在右侧渲染内容，免点“预览”
+  useEffect(() => {
+    const docId = selection?.docId;
+    if (!docId) {
+      previewDocIdRef.current = null;
+      setPreviewDoc(null);
+      setPreviewLoading(false);
+      return;
+    }
+    if (previewDocIdRef.current === docId) return;
+    previewDocIdRef.current = docId;
+
+    let cancelled = false;
+    setPreviewLoading(true);
+    // 选中文档时顺带预热编辑器分包，双击打开更快
+    void import("@/components/canvas/document-editor-dialog");
+
+    fetch(`/api/documents/${docId}`)
+      .then(async (response) => {
+        const data = (await response.json()) as { document?: DocumentDTO; error?: string };
+        if (!response.ok || !data.document) throw new Error(data.error || "文档不存在");
+        if (!cancelled) setPreviewDoc(data.document);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewDoc(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selection?.docId]);
+
   async function handleImageFile(file: File) {
     setBusy("image");
     try {
@@ -160,7 +231,11 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
       const response = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: file.name.replace(/\.(md|markdown)$/i, ""), contentMd }),
+        body: JSON.stringify({
+          title: file.name.replace(/\.(md|markdown)$/i, ""),
+          contentMd,
+          kind: "markdown",
+        }),
       });
       const data = (await response.json()) as { document?: DocumentDTO; error?: string };
       if (!response.ok || !data.document) {
@@ -171,7 +246,7 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
       setTab("docs");
       await loadDocs(query.trim());
       setActiveDoc(data.document);
-      setDocMode("view");
+      setDialogOpen(true);
     } catch {
       toast.error("读取 Markdown 文件失败");
     } finally {
@@ -185,7 +260,7 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
       const response = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "新建表格", contentMd: TABLE_TEMPLATE }),
+        body: JSON.stringify({ title: "新建表格", contentMd: TABLE_TEMPLATE, kind: "table" }),
       });
       const data = (await response.json()) as { document?: DocumentDTO; error?: string };
       if (!response.ok || !data.document) {
@@ -193,8 +268,11 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
         return;
       }
       withApi((api) => insertDocCard(api, data.document!));
-      toast.success("表格已作为文档卡片插入");
+      toast.success("表格已插入，可直接在弹窗里编辑单元格");
+      setTab("docs");
       await loadDocs(query.trim());
+      setActiveDoc(data.document);
+      setDialogOpen(true);
     } catch {
       toast.error("创建表格失败");
     } finally {
@@ -211,36 +289,9 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
         return;
       }
       setActiveDoc(data.document);
-      setDraftTitle(data.document.title);
-      setDraftContent(data.document.contentMd);
-      setDocMode("view");
+      setDialogOpen(true);
     } catch {
       toast.error("打开文档失败");
-    }
-  }
-
-  async function saveDoc() {
-    if (!activeDoc || savingDoc) return;
-    setSavingDoc(true);
-    try {
-      const response = await fetch(`/api/documents/${activeDoc.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: draftTitle.trim() || activeDoc.title, contentMd: draftContent }),
-      });
-      const data = (await response.json()) as { document?: DocumentDTO; error?: string };
-      if (!response.ok || !data.document) {
-        toast.error(data.error || "保存失败");
-        return;
-      }
-      setActiveDoc(data.document);
-      setDocMode("view");
-      toast.success("文档已保存");
-      await loadDocs(query.trim());
-    } catch {
-      toast.error("保存文档失败");
-    } finally {
-      setSavingDoc(false);
     }
   }
 
@@ -264,22 +315,39 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
     }
   }
 
-  function createBlankDoc() {
-    fetch("/api/documents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "未命名文档", contentMd: "# 未命名文档\n\n开始写作吧。" }),
-    })
-      .then(async (response) => {
-        const data = (await response.json()) as { document?: DocumentDTO; error?: string };
-        if (!response.ok || !data.document) throw new Error(data.error || "创建失败");
-        setActiveDoc(data.document);
-        setDraftTitle(data.document.title);
-        setDraftContent(data.document.contentMd);
-        setDocMode("edit");
-        await loadDocs(query.trim());
-      })
-      .catch((error) => toast.error(error instanceof Error ? error.message : "创建文档失败"));
+  async function createBlankDoc() {
+    setBusy("newdoc");
+    try {
+      const response = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "未命名文档",
+          contentMd: "# 未命名文档\n\n开始写作吧。",
+          kind: "markdown",
+        }),
+      });
+      const data = (await response.json()) as { document?: DocumentDTO; error?: string };
+      if (!response.ok || !data.document) {
+        toast.error(data.error || "创建文档失败");
+        return;
+      }
+      setTab("docs");
+      await loadDocs(query.trim());
+      setActiveDoc(data.document);
+      setDialogOpen(true);
+    } catch {
+      toast.error("创建文档失败");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function insertExistingDoc(doc: DocListItem) {
+    withApi((api) => {
+      insertDocCard(api, doc);
+      toast.success("文档卡片已插入");
+    });
   }
 
   return (
@@ -312,22 +380,50 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
         </div>
       </div>
 
-      {selection?.docId || selection?.videoAssetId ? (
+      {selection?.docId ? (
+        <div className="mx-3 mt-3 overflow-hidden rounded-xl border border-brand/25 bg-brand/5">
+          <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-brand">
+                已选中文档
+              </p>
+              <p className="mt-0.5 truncate text-[12.5px] font-medium text-ink">
+                {previewDoc?.title || selection.docTitle || "文档"}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-1.5">
+              <Button
+                size="sm"
+                variant="subtle"
+                onClick={() => void openDoc(selection.docId!)}
+              >
+                打开编辑
+              </Button>
+            </div>
+          </div>
+          <div className="max-h-[210px] overflow-y-auto border-t border-brand/15 bg-surface px-3 py-2">
+            {previewLoading ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-[11.5px] text-muted">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                加载文档内容
+              </div>
+            ) : previewDoc ? (
+              <MarkdownView content={previewDoc.contentMd} />
+            ) : (
+              <p className="py-3 text-center text-[11.5px] text-faint">文档内容加载失败</p>
+            )}
+          </div>
+        </div>
+      ) : selection?.videoAssetId ? (
         <div className="mx-3 mt-3 rounded-xl border border-brand/25 bg-brand/5 p-3">
           <p className="text-[11px] font-medium uppercase tracking-wide text-brand">已选中画布元素</p>
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <p className="min-w-0 truncate text-[12.5px] text-ink">
-              {selection.docId ? `📄 ${selection.docTitle || "文档"}` : `▶ ${selection.videoName || "视频"}`}
+              ▶ {selection.videoName || "视频"}
             </p>
-            {selection.docId ? (
-              <Button size="sm" variant="subtle" onClick={() => void openDoc(selection.docId!)}>
-                预览
-              </Button>
-            ) : (
-              <Button size="sm" variant="subtle" onClick={() => setVideoOpen(selection.videoAssetId!)}>
-                播放
-              </Button>
-            )}
+            <Button size="sm" variant="subtle" onClick={() => setVideoOpen(selection.videoAssetId!)}>
+              播放
+            </Button>
           </div>
         </div>
       ) : null}
@@ -386,7 +482,7 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
                 Markdown 文档
               </div>
               <p className="mt-1 text-[11.5px] leading-5 text-muted">
-                上传 .md 文件后生成文档卡片，选中卡片即可在右侧预览。
+                上传或直接把 .md 拖进画布，生成文档卡片后双击即可编辑。
               </p>
               <div className="mt-2.5 flex gap-2">
                 <Button
@@ -404,7 +500,7 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
             </div>
 
             <p className="px-1 text-[11px] leading-5 text-faint">
-              提示：画布自带完整工具栏，双击元素可编辑文字，拖拽控制点可缩放旋转。
+              提示：文档卡片双击可直接打开编辑；图片、视频、.md 都可以直接拖进画布。
             </p>
           </div>
         ) : (
@@ -419,7 +515,13 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
                   className="h-9 pl-8 text-[12.5px]"
                 />
               </div>
-              <Button size="icon" variant="outline" onClick={createBlankDoc} aria-label="新建文档">
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => void createBlankDoc()}
+                loading={busy === "newdoc"}
+                aria-label="新建文档"
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -440,7 +542,11 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
                 {docs.map((doc) => (
                   <li key={doc.id} className="group">
                     <div className="flex items-center gap-2 rounded-lg px-2 py-2 transition hover:bg-surface-2">
-                      <FileText className="h-4 w-4 shrink-0 text-brand" />
+                      {doc.kind === "table" ? (
+                        <Table2 className="h-4 w-4 shrink-0 text-brand" />
+                      ) : (
+                        <FileText className="h-4 w-4 shrink-0 text-brand" />
+                      )}
                       <button
                         type="button"
                         onClick={() => void openDoc(doc.id)}
@@ -448,17 +554,13 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
                       >
                         <span className="block truncate text-[12.5px] text-ink">{doc.title}</span>
                         <span className="block text-[10.5px] text-faint">
+                          {doc.kind === "table" ? "表格 · " : ""}
                           {relativeTime(doc.updatedAt)}
                         </span>
                       </button>
                       <button
                         type="button"
-                        onClick={() =>
-                          withApi((api) => {
-                            insertDocCard(api, doc);
-                            toast.success("文档卡片已插入");
-                          })
-                        }
+                        onClick={() => insertExistingDoc(doc)}
                         className="icon-btn h-7 w-7 opacity-0 transition group-hover:opacity-100"
                         aria-label="插入到画布"
                       >
@@ -516,72 +618,20 @@ export function AssetPanel({ canvasId, apiRef, selection, onClose }: AssetPanelP
         }}
       />
 
-      {/* 文档预览与编辑 */}
-      <Modal
-        open={Boolean(activeDoc)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setActiveDoc(null);
-            setDocMode("view");
-          }
+      <DocumentEditorDialog
+        open={dialogOpen}
+        document={activeDoc}
+        onOpenChange={setDialogOpen}
+        onSaved={(doc) => {
+          setActiveDoc(doc);
+          setPreviewDoc((previous) => (previous?.id === doc.id ? doc : previous));
+          void loadDocs(query.trim());
         }}
-        size="xl"
-        title={docMode === "view" ? activeDoc?.title : "编辑文档"}
-        description={docMode === "view" ? "共享文档 · 所有成员可见" : undefined}
-        footer={
-          activeDoc ? (
-            docMode === "view" ? (
-              <>
-                <Button variant="ghost" onClick={() => setDocMode("edit")}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  编辑
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    withApi((api) => insertDocCard(api, activeDoc));
-                    setActiveDoc(null);
-                    toast.success("文档卡片已插入画布");
-                  }}
-                >
-                  插入到画布
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" onClick={() => setDocMode("view")} disabled={savingDoc}>
-                  取消
-                </Button>
-                <Button variant="primary" loading={savingDoc} onClick={() => void saveDoc()}>
-                  保存
-                </Button>
-              </>
-            )
-          ) : null
-        }
-      >
-        {activeDoc ? (
-          docMode === "view" ? (
-            <div className="max-h-[62vh] overflow-y-auto pr-1">
-              <MarkdownView content={activeDoc.contentMd} />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <Input
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
-                placeholder="文档标题"
-              />
-              <Textarea
-                value={draftContent}
-                onChange={(event) => setDraftContent(event.target.value)}
-                className="min-h-[46vh] font-mono text-[12.5px] leading-6"
-                placeholder="支持 Markdown 语法"
-              />
-            </div>
-          )
-        ) : null}
-      </Modal>
+        onInsert={(doc) => {
+          withApi((api) => insertDocCard(api, doc));
+          toast.success("文档卡片已插入画布");
+        }}
+      />
 
       {/* 视频播放 */}
       <Modal

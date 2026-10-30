@@ -30,11 +30,16 @@ import { Dropdown, MenuDivider, MenuItem } from "@/components/ui/dropdown";
 import { Tip } from "@/components/ui/tip";
 import { useTheme } from "@/lib/use-theme";
 import { cn } from "@/lib/utils";
-import type { AppUser, SceneData } from "@/lib/types";
+import type { AppUser, DocumentDTO, SceneData } from "@/lib/types";
 import { CollabConnection, type CollabStatus } from "@/lib/collab/client";
 import { SceneBinding } from "./scene-binding";
 import { fetchAssetDataURL, hydrateSceneFiles, uploadAsset } from "./scene-assets";
-import { AssetPanel, type CanvasSelection } from "./asset-panel";
+import { insertDocCard, insertVideoCard } from "./insert";
+import {
+  AssetPanel,
+  type CanvasSelection,
+  type OpenElementRequest,
+} from "./asset-panel";
 
 const Excalidraw = dynamic(
   async () => {
@@ -96,6 +101,12 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
   const [panelOpen, setPanelOpen] = useState(true);
   const [selection, setSelection] = useState<CanvasSelection | null>(null);
   const [collaborators, setCollaborators] = useState<CollaboratorInfo[]>([]);
+  const [openRequest, setOpenRequest] = useState<OpenElementRequest | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const dragDepthRef = useRef(0);
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
+  const processDroppedFilesRef = useRef<(files: File[]) => Promise<void>>(async () => {});
+  const lastCanvasHitRef = useRef<{ kind: "doc" | "video"; id: string } | null>(null);
   const initialRef = useRef<{ elements: any[]; files: Record<string, any> }>({
     elements: [],
     files: {},
@@ -352,8 +363,22 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
     (api: ExcalidrawImperativeAPI) => {
       apiRef.current = api;
 
-      api.onPointerDown(() => {
+      api.onPointerDown((_activeTool, pointerDownState) => {
         pointerDownRef.current = true;
+
+        // 记录这次点击命中的卡片，双击时用它判断目标
+        const hits = [
+          pointerDownState.hit.element,
+          ...pointerDownState.hit.allHitElements,
+        ].filter(Boolean) as any[];
+        const docElement = hits.find((element) => element.customData?.mbDocId);
+        const videoElement = hits.find((element) => element.customData?.mbVideoAssetId);
+
+        lastCanvasHitRef.current = docElement
+          ? { kind: "doc", id: docElement.customData.mbDocId }
+          : videoElement
+            ? { kind: "video", id: videoElement.customData.mbVideoAssetId }
+            : null;
       });
 
       api.onPointerUp(() => {
@@ -625,6 +650,136 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
+  // 拖拽导入：.md 生成文档卡片，视频生成视频卡片，图片交给 Excalidraw 原生处理
+  const isFileDrag = (event: React.DragEvent) =>
+    Array.from(event.dataTransfer.types).includes("Files");
+
+  function handleDragEnter(event: React.DragEvent) {
+    if (!isFileDrag(event)) return;
+    dragDepthRef.current += 1;
+    setDragActive(true);
+  }
+
+  function handleDragLeave(event: React.DragEvent) {
+    if (!isFileDrag(event)) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragActive(false);
+  }
+
+  function handleDragOver(event: React.DragEvent) {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  async function importMarkdownFile(file: File, api: ExcalidrawImperativeAPI) {
+    const contentMd = await file.text();
+    const response = await fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: file.name.replace(/\.(md|markdown)$/i, ""),
+        contentMd,
+        kind: "markdown",
+      }),
+    });
+    const data = (await response.json()) as { document?: DocumentDTO; error?: string };
+    if (!response.ok || !data.document) {
+      throw new Error(data.error || "导入文档失败");
+    }
+    insertDocCard(api, data.document);
+    toast.success(`已导入「${data.document.title}」并插入画布`);
+  }
+
+  async function importVideoFile(file: File, api: ExcalidrawImperativeAPI) {
+    const asset = await uploadAsset(file, "video");
+    insertVideoCard(api, asset);
+    toast.success("视频卡片已插入画布");
+  }
+
+  async function processDroppedFiles(files: File[]) {
+    dragDepthRef.current = 0;
+    setDragActive(false);
+
+    if (files.length === 0) return;
+
+    // 图片保留 Excalidraw 原生拖入逻辑，避免破坏它的插入体验
+    if (files.some((file) => file.type.startsWith("image/"))) return;
+
+    const markdownFiles = files.filter(
+      (file) => /\.(md|markdown)$/i.test(file.name) || file.type === "text/markdown"
+    );
+    const videoFiles = files.filter((file) => file.type.startsWith("video/"));
+    if (markdownFiles.length === 0 && videoFiles.length === 0) return;
+
+    const api = apiRef.current;
+    if (!api) {
+      toast.error("画布还没准备好，请稍候");
+      return;
+    }
+
+    for (const file of markdownFiles) {
+      try {
+        await importMarkdownFile(file, api);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "导入 Markdown 失败");
+      }
+    }
+
+    for (const file of videoFiles) {
+      try {
+        await importVideoFile(file, api);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "导入视频失败");
+      }
+    }
+  }
+
+  processDroppedFilesRef.current = processDroppedFiles;
+
+  // 捕获阶段先拦截 .md / 视频的 drop，避免 Excalidraw 再弹“无法加载无效的文件”
+  useEffect(() => {
+    const element = canvasWrapRef.current;
+    if (!element) return;
+
+    const onDragOver = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes("Files")) {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      }
+    };
+
+    const onDrop = (event: DragEvent) => {
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      if (files.length === 0) return;
+
+      const hasImage = files.some((file) => file.type.startsWith("image/"));
+      const hasDoc = files.some(
+        (file) => /\.(md|markdown)$/i.test(file.name) || file.type === "text/markdown"
+      );
+      const hasVideo = files.some((file) => file.type.startsWith("video/"));
+      if (hasImage || (!hasDoc && !hasVideo)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      void processDroppedFilesRef.current(files);
+    };
+
+    element.addEventListener("dragover", onDragOver, true);
+    element.addEventListener("drop", onDrop, true);
+    return () => {
+      element.removeEventListener("dragover", onDragOver, true);
+      element.removeEventListener("drop", onDrop, true);
+    };
+  }, []);
+
+  function handleCanvasDoubleClick() {
+    const hit = lastCanvasHitRef.current;
+    if (!hit) return;
+    setPanelOpen(true);
+    setOpenRequest({ kind: hit.kind, id: hit.id, seq: Date.now() });
+  }
+
   const onlineCount = collaborators.length + 1;
   const statusLabel =
     status === "connected" ? (saveState === "saving" ? "同步中" : "已同步") : status === "connecting" ? "连接中" : "离线编辑";
@@ -751,7 +906,24 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       </header>
 
       <div className="relative flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1">
+        <div
+          ref={canvasWrapRef}
+          className="relative min-w-0 flex-1"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDoubleClick={handleCanvasDoubleClick}
+        >
+          {dragActive ? (
+            <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand/50 bg-brand/5 backdrop-blur-[1px]">
+              <div className="rounded-xl border border-line bg-surface px-4 py-3 text-center shadow-float">
+                <p className="text-[13px] font-medium text-ink">松开导入到画布</p>
+                <p className="mt-1 text-[11.5px] text-muted">
+                  支持 .md 文档、图片、视频
+                </p>
+              </div>
+            </div>
+          ) : null}
           {ready ? (
             <Excalidraw
               initialData={{
@@ -795,6 +967,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
             canvasId={canvas.id}
             apiRef={apiRef}
             selection={selection}
+            openRequest={openRequest}
             onClose={() => setPanelOpen(false)}
           />
         ) : null}

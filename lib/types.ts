@@ -104,6 +104,7 @@ export type DocumentDTO = {
   id: string;
   title: string;
   contentMd: string;
+  kind: "markdown" | "table";
   createdAt: string;
   updatedAt: string;
 };

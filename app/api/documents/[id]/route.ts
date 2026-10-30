@@ -9,6 +9,7 @@ const detailSelect = {
   id: true,
   title: true,
   contentMd: true,
+  kind: true,
   createdAt: true,
   updatedAt: true,
 } as const;
