@@ -787,6 +787,152 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
 
   processDroppedFilesRef.current = processDroppedFiles;
 
+  // 原生画框：点内部空白也能拖，不用非找边框
+  useEffect(() => {
+    const wrapper = canvasWrapRef.current;
+    if (!wrapper) return;
+    const wrapperEl = wrapper as HTMLDivElement;
+
+    let drag: {
+      frameId: string;
+      startX: number;
+      startY: number;
+      moved: boolean;
+      initial: Map<string, { x: number; y: number }>;
+    } | null = null;
+
+    function scenePoint(api: ExcalidrawImperativeAPI, clientX: number, clientY: number) {
+      const state = api.getAppState();
+      const zoom = state.zoom?.value ?? 1;
+      return {
+        x: (clientX - (state.offsetLeft || 0)) / zoom - state.scrollX,
+        y: (clientY - (state.offsetTop || 0)) / zoom - state.scrollY,
+      };
+    }
+
+    function pointInside(element: any, point: { x: number; y: number }) {
+      return (
+        point.x >= element.x &&
+        point.x <= element.x + element.width &&
+        point.y >= element.y &&
+        point.y <= element.y + element.height
+      );
+    }
+
+    function findFrameAt(api: ExcalidrawImperativeAPI, point: { x: number; y: number }) {
+      return api
+        .getSceneElements()
+        .filter(
+          (element: any) =>
+            element.type === "frame" &&
+            !element.isDeleted &&
+            !element.locked &&
+            pointInside(element, point)
+        )
+        .sort((a: any, b: any) => a.width * a.height - b.width * b.height)[0];
+    }
+
+    function hasContentAt(api: ExcalidrawImperativeAPI, point: { x: number; y: number }) {
+      return api.getSceneElements().some(
+        (element: any) =>
+          element.type !== "frame" &&
+          !element.isDeleted &&
+          pointInside(element, point)
+      );
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      if (!drag) return;
+      const api = apiRef.current;
+      if (!api) return;
+
+      const point = scenePoint(api, event.clientX, event.clientY);
+      const deltaX = point.x - drag.startX;
+      const deltaY = point.y - drag.startY;
+      if (!drag.moved && Math.abs(deltaX) + Math.abs(deltaY) > 2) drag.moved = true;
+      if (!drag.moved) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const elements = api.getSceneElements();
+      const next = elements.map((element: any) => {
+        const start = drag?.initial.get(element.id);
+        if (!start) return element;
+        return {
+          ...element,
+          x: start.x + deltaX,
+          y: start.y + deltaY,
+          version: element.version + 1,
+          versionNonce: Math.floor(Math.random() * 2 ** 31),
+        };
+      });
+
+      api.updateScene({
+        elements: next as any,
+        captureUpdate: "IMMEDIATELY",
+      });
+    }
+
+    function handlePointerUp(event: PointerEvent) {
+      if (!drag) return;
+      event.preventDefault();
+      event.stopPropagation();
+      drag = null;
+      window.removeEventListener("pointermove", handlePointerMove, true);
+      window.removeEventListener("pointerup", handlePointerUp, true);
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (event.button !== 0) return;
+      const api = apiRef.current;
+      if (!api) return;
+      if (api.getAppState().activeTool?.type !== "selection") return;
+
+      const point = scenePoint(api, event.clientX, event.clientY);
+      const frame = findFrameAt(api, point) as any;
+      if (!frame) return;
+      // 点在画框内的其他元素上时，保留元素自己的点击/拖拽
+      if (hasContentAt(api, point)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      canvasPressRef.current = null;
+      lastCanvasHitRef.current = null;
+
+      const elements = api.getSceneElements();
+      const ids = [frame.id, ...(Array.isArray(frame.children) ? frame.children : [])];
+      const initial = new Map<string, { x: number; y: number }>();
+      for (const id of ids) {
+        const element = elements.find((item: any) => item.id === id);
+        if (element) initial.set(id, { x: element.x, y: element.y });
+      }
+
+      drag = {
+        frameId: frame.id,
+        startX: point.x,
+        startY: point.y,
+        moved: false,
+        initial,
+      };
+
+      api.updateScene({
+        appState: { selectedElementIds: { [frame.id]: true } } as any,
+        captureUpdate: "IMMEDIATELY",
+      });
+
+      window.addEventListener("pointermove", handlePointerMove, true);
+      window.addEventListener("pointerup", handlePointerUp, true);
+    }
+
+    wrapperEl.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      wrapperEl.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("pointermove", handlePointerMove, true);
+      window.removeEventListener("pointerup", handlePointerUp, true);
+    };
+  }, []);
+
   // 捕获阶段先拦截 .md / 视频的 drop，避免 Excalidraw 再弹“无法加载无效的文件”
   useEffect(() => {
     const element = canvasWrapRef.current;
