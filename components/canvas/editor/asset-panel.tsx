@@ -5,8 +5,10 @@ import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import {
   ArrowUpRight,
+  Boxes,
   Circle,
   Diamond,
+  Download,
   FileText,
   FileUp,
   Image as ImageIcon,
@@ -19,6 +21,7 @@ import {
   Table2,
   Trash2,
   Type,
+  Ungroup,
   Video,
   X,
 } from "lucide-react";
@@ -41,12 +44,15 @@ const DocumentEditorDialog = dynamic(
 );
 import {
   activateTool,
+  groupSelectedElements,
   insertDocCard,
+  insertFileCard,
   insertImage,
   insertShape,
   insertSticky,
   insertText,
   insertVideoCard,
+  ungroupSelectedElements,
 } from "./insert";
 import { blobToDataURL, uploadAsset } from "./scene-assets";
 
@@ -57,12 +63,17 @@ export type CanvasSelection = {
   docTitle?: string;
   videoAssetId?: string;
   videoName?: string;
+  fileAssetId?: string;
+  fileName?: string;
+  fileMime?: string;
 };
 
 export type OpenElementRequest = {
-  kind: "doc" | "video";
+  kind: "doc" | "video" | "file";
   id: string;
   seq: number;
+  name?: string;
+  mime?: string;
 };
 
 type AssetPanelProps = {
@@ -109,6 +120,12 @@ export function AssetPanel({
 
   // 选中元素的视频播放
   const [videoOpen, setVideoOpen] = useState<string | null>(null);
+  // 文件资源预览（PDF / Office 等）
+  const [filePreview, setFilePreview] = useState<{
+    id: string;
+    name: string;
+    mime: string;
+  } | null>(null);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -156,8 +173,14 @@ export function AssetPanel({
     setTab("docs");
     if (openRequest.kind === "doc") {
       void openDoc(openRequest.id);
-    } else {
+    } else if (openRequest.kind === "video") {
       setVideoOpen(openRequest.id);
+    } else {
+      setFilePreview({
+        id: openRequest.id,
+        name: openRequest.name || "文件",
+        mime: openRequest.mime || "",
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRequest?.seq]);
@@ -224,31 +247,46 @@ export function AssetPanel({
     }
   }
 
-  async function handleMarkdownFile(file: File) {
-    setBusy("markdown");
+  async function handleImportFile(file: File) {
+    setBusy("file");
+    const lower = file.name.toLowerCase();
+    const isTextDoc =
+      /\.(md|markdown|txt|csv)$/i.test(lower) ||
+      file.type === "text/markdown" ||
+      file.type === "text/plain" ||
+      file.type === "text/csv";
+
     try {
-      const contentMd = await file.text();
-      const response = await fetch("/api/documents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: file.name.replace(/\.(md|markdown)$/i, ""),
-          contentMd,
-          kind: "markdown",
-        }),
-      });
-      const data = (await response.json()) as { document?: DocumentDTO; error?: string };
-      if (!response.ok || !data.document) {
-        toast.error(data.error || "导入文档失败");
+      if (isTextDoc) {
+        const contentMd = await file.text();
+        const response = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: file.name,
+            contentMd,
+            kind: "markdown",
+          }),
+        });
+        const data = (await response.json()) as { document?: DocumentDTO; error?: string };
+        if (!response.ok || !data.document) {
+          toast.error(data.error || "导入文档失败");
+          return;
+        }
+        toast.success(`已导入「${data.document.title}」`);
+        setTab("docs");
+        await loadDocs(query.trim());
+        setActiveDoc(data.document);
+        setDialogOpen(true);
         return;
       }
-      toast.success("Markdown 已导入");
-      setTab("docs");
-      await loadDocs(query.trim());
-      setActiveDoc(data.document);
-      setDialogOpen(true);
-    } catch {
-      toast.error("读取 Markdown 文件失败");
+
+      // PDF / Office / 压缩包等：上传成资源并插入文件卡片
+      const asset = await uploadAsset(file, "file");
+      withApi((api) => insertFileCard(api, asset));
+      toast.success(`「${file.name}」已作为文件卡片插入`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "导入文件失败");
     } finally {
       setBusy(null);
     }
@@ -414,6 +452,28 @@ export function AssetPanel({
             )}
           </div>
         </div>
+      ) : selection?.fileAssetId ? (
+        <div className="mx-3 mt-3 rounded-xl border border-brand/25 bg-brand/5 p-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-brand">已选中文件</p>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate text-[12.5px] text-ink">
+              📎 {selection.fileName || "文件"}
+            </p>
+            <Button
+              size="sm"
+              variant="subtle"
+              onClick={() =>
+                setFilePreview({
+                  id: selection.fileAssetId!,
+                  name: selection.fileName || "文件",
+                  mime: selection.fileMime || "",
+                })
+              }
+            >
+              打开
+            </Button>
+          </div>
+        </div>
       ) : selection?.videoAssetId ? (
         <div className="mx-3 mt-3 rounded-xl border border-brand/25 bg-brand/5 p-3">
           <p className="text-[11px] font-medium uppercase tracking-wide text-brand">已选中画布元素</p>
@@ -474,24 +534,49 @@ export function AssetPanel({
                 icon={busy === "table" ? <Loader2 className="animate-spin" /> : <Table2 />}
                 onClick={() => void createTableDoc()}
               />
+              <InsertTile
+                label="组合"
+                icon={<Boxes />}
+                onClick={() =>
+                  withApi(async (api) => {
+                    const grouped = await groupSelectedElements(api);
+                    if (grouped) {
+                      toast.success("已组合，拖动任意成员即可整体移动");
+                    } else {
+                      toast.info("请先选中要组合的元素");
+                    }
+                  })
+                }
+              />
+              <InsertTile
+                label="取消组合"
+                icon={<Ungroup />}
+                onClick={() =>
+                  withApi((api) => {
+                    const ungrouped = ungroupSelectedElements(api);
+                    if (ungrouped) toast.success("已取消组合");
+                    else toast.info("选中的元素没有分组");
+                  })
+                }
+              />
             </div>
 
             <div className="rounded-xl border border-line bg-surface-2/50 p-3">
               <div className="flex items-center gap-2 text-[12px] font-medium text-ink">
                 <FileUp className="h-3.5 w-3.5 text-brand" />
-                Markdown 文档
+                文档与文件
               </div>
               <p className="mt-1 text-[11.5px] leading-5 text-muted">
-                上传或直接把 .md 拖进画布，生成文档卡片后双击即可编辑。
+                支持 Markdown / TXT / PDF / Office，也可以直接把文件拖进画布；文档可在线编辑，文件可下载。
               </p>
               <div className="mt-2.5 flex gap-2">
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => markdownInputRef.current?.click()}
-                  loading={busy === "markdown"}
+                  loading={busy === "file"}
                 >
-                  导入 .md
+                  导入文件
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setTab("docs")}>
                   打开文档库
@@ -500,7 +585,7 @@ export function AssetPanel({
             </div>
 
             <p className="px-1 text-[11px] leading-5 text-faint">
-              提示：文档卡片双击可直接打开编辑；图片、视频、.md 都可以直接拖进画布。
+              提示：文档/文件卡片单击即可打开；选中多个元素后点「组合」可以整体拖动。
             </p>
           </div>
         ) : (
@@ -609,12 +694,12 @@ export function AssetPanel({
       <input
         ref={markdownInputRef}
         type="file"
-        accept=".md,.markdown,text/markdown,text/plain"
+        accept=".md,.markdown,.txt,.csv,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,text/markdown,text/plain,text/csv,application/pdf"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
-          if (file) void handleMarkdownFile(file);
+          if (file) void handleImportFile(file);
         }}
       />
 
@@ -632,6 +717,54 @@ export function AssetPanel({
           toast.success("文档卡片已插入画布");
         }}
       />
+
+      {/* 文件预览与下载 */}
+      <Modal
+        open={Boolean(filePreview)}
+        onOpenChange={(open) => !open && setFilePreview(null)}
+        size="xl"
+        title={filePreview?.name}
+        description="文件资源 · 支持下载"
+        footer={
+          filePreview ? (
+            <div className="flex w-full items-center justify-between gap-2">
+              <span className="text-[11px] text-faint">PDF 可在线预览，Office 等格式请下载查看</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/api/assets/${filePreview.id}`}
+                  download={filePreview.name}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand px-3.5 text-[13px] font-medium text-white transition hover:bg-brand/90"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  下载文件
+                </a>
+                <Button variant="secondary" onClick={() => setFilePreview(null)}>
+                  关闭
+                </Button>
+              </div>
+            </div>
+          ) : null
+        }
+      >
+        {filePreview ? (
+          filePreview.mime === "application/pdf" || /\.pdf$/i.test(filePreview.name) ? (
+            <iframe
+              key={filePreview.id}
+              src={`/api/assets/${filePreview.id}`}
+              title={filePreview.name}
+              className="h-[62vh] w-full rounded-xl border border-line bg-white"
+            />
+          ) : (
+            <div className="flex h-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line bg-surface-2/50 text-center">
+              <FileText className="h-8 w-8 text-faint" />
+              <p className="text-[13px] font-medium text-ink">{filePreview.name}</p>
+              <p className="text-[11.5px] text-muted">
+                该文件类型暂不支持在线预览，下载后查看
+              </p>
+            </div>
+          )
+        ) : null}
+      </Modal>
 
       {/* 视频播放 */}
       <Modal

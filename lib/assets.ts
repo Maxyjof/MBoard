@@ -37,6 +37,14 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   "application/pdf": ".pdf",
   "text/markdown": ".md",
   "text/plain": ".txt",
+  "text/csv": ".csv",
+  "application/msword": ".doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+  "application/vnd.ms-excel": ".xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+  "application/vnd.ms-powerpoint": ".ppt",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+  "application/zip": ".zip",
 };
 
 // mime 归一化：去掉参数并统一 markdown 别名
@@ -47,7 +55,7 @@ function normalizeMime(mime: string): string {
   return base;
 }
 
-// 白名单：图片、视频、Markdown、纯文本、PDF
+// 白名单：图片、视频、Markdown、纯文本、PDF 与常见办公文档
 export function isAllowedMime(mime: string): boolean {
   const value = normalizeMime(mime);
   return (
@@ -55,7 +63,15 @@ export function isAllowedMime(mime: string): boolean {
     value.startsWith("video/") ||
     value === "text/markdown" ||
     value === "text/plain" ||
-    value === "application/pdf"
+    value === "text/csv" ||
+    value === "application/pdf" ||
+    value === "application/msword" ||
+    value === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    value === "application/vnd.ms-excel" ||
+    value === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    value === "application/vnd.ms-powerpoint" ||
+    value === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    value === "application/zip"
   );
 }
 

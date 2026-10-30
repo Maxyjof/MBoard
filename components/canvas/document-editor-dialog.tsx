@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FilePlus2 } from "lucide-react";
+import { FilePlus2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -103,6 +103,19 @@ export function DocumentEditorDialog({
     }
   }
 
+  // 下载当前文档内容，标题已有扩展名时沿用，否则补 .md
+  function downloadDraft() {
+    if (!draft) return;
+    const filename = /\.[a-z0-9]{1,8}$/i.test(draft.title) ? draft.title : `${draft.title}.md`;
+    const blob = new Blob([draft.content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = window.document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
   return (
     <Modal
       open={open && Boolean(document)}
@@ -116,6 +129,10 @@ export function DocumentEditorDialog({
       }
       footer={
         <>
+          <Button variant="ghost" onClick={downloadDraft} disabled={!draft || saving || inserting}>
+            <Download className="h-3.5 w-3.5" />
+            下载
+          </Button>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving || inserting}>
             取消
           </Button>
