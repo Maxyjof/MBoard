@@ -1,0 +1,107 @@
+// 组合卡片的数据与 SVG 渲染：卡片是一张图片，不会散成多个元素
+export type CompositeCardDocument = {
+  id: string;
+  title: string;
+  words?: number;
+};
+
+export type CompositeCardData = {
+  title: string;
+  fields: string[];
+  document?: CompositeCardDocument | null;
+};
+
+export const COMPOSITE_CARD_WIDTH = 420;
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+export function compositeCardHeight(fields: number, hasDocument: boolean): number {
+  return 100 + fields * 64 + (hasDocument ? 84 : 0) + 20;
+}
+
+export function renderCompositeCard(data: CompositeCardData): {
+  svg: string;
+  dataURL: string;
+  width: number;
+  height: number;
+} {
+  const width = COMPOSITE_CARD_WIDTH;
+  const fields = data.fields.filter((field) => field.trim());
+  const hasDocument = Boolean(data.document);
+  const height = compositeCardHeight(fields.length, hasDocument);
+  const meta = `${fields.length} 个字段${hasDocument ? " · 1 个文档" : ""}`;
+  const rows: string[] = [];
+
+  fields.forEach((field, index) => {
+    const rowY = 96 + index * 64;
+    rows.push(`
+      <rect x="20" y="${rowY}" width="${width - 40}" height="56" rx="8" fill="#ffffff" stroke="#e9ecef" stroke-width="1"/>
+      <text x="36" y="${rowY + 34}" font-size="14" fill="#343a40">${escapeXml(field)}</text>
+    `);
+  });
+
+  if (data.document) {
+    const docY = 96 + fields.length * 64 + 8;
+    rows.push(`
+      <rect x="20" y="${docY}" width="${width - 40}" height="64" rx="8" fill="#f8f9fa" stroke="#e9ecef" stroke-width="1"/>
+      <g transform="translate(36 ${docY + 16})">
+        <rect width="24" height="30" rx="3" fill="#ffffff" stroke="#adb5bd" stroke-width="1"/>
+        <path d="M6 8h12M6 13h12M6 18h8" stroke="#adb5bd" stroke-width="1.2" stroke-linecap="round"/>
+      </g>
+      <text x="72" y="${docY + 27}" font-size="14" fill="#343a40">${escapeXml(
+        truncate(data.document.title, 24)
+      )}</text>
+      <text x="72" y="${docY + 47}" font-size="11" fill="#868e96">${
+        data.document.words ?? 0
+      } 字 · 点击卡片编辑</text>
+    `);
+  } else {
+    rows.push(`
+      <text x="${width / 2}" y="${height - 18}" font-size="11" fill="#adb5bd" text-anchor="middle">点击卡片继续添加成员</text>
+    `);
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect x="0.75" y="0.75" width="${width - 1.5}" height="${height - 1.5}" rx="16" fill="#ffffff" stroke="#dee2e6" stroke-width="1.5"/>
+    <text x="${width / 2}" y="46" font-size="22" font-weight="600" fill="#1e1e1e" text-anchor="middle" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif">${escapeXml(
+      data.title || "未命名组合"
+    )}</text>
+    <text x="${width / 2}" y="72" font-size="12" fill="#868e96" text-anchor="middle" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif">${escapeXml(
+      meta
+    )}</text>
+    <g font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif">${rows.join("")}</g>
+  </svg>`;
+
+  return {
+    svg,
+    dataURL: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    width,
+    height,
+  };
+}
+
+export function parseCompositeCardData(customData: unknown): CompositeCardData | null {
+  const record = customData as { mbCompositeData?: unknown } | null;
+  if (!record?.mbCompositeData) return null;
+  try {
+    const data =
+      typeof record.mbCompositeData === "string"
+        ? (JSON.parse(record.mbCompositeData) as CompositeCardData)
+        : (record.mbCompositeData as CompositeCardData);
+    if (!data || typeof data.title !== "string" || !Array.isArray(data.fields)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}

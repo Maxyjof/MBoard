@@ -34,6 +34,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MarkdownView } from "@/components/canvas/markdown-view";
 import { CompositeCardDialog } from "@/components/canvas/composite-card-dialog";
+import type { CompositeCardData } from "@/components/canvas/composite-card-render";
 import { cn, relativeTime } from "@/lib/utils";
 import type { DocumentDTO } from "@/lib/types";
 
@@ -58,6 +59,7 @@ import {
   insertText,
   insertVideoCard,
   ungroupSelectedElements,
+  updateCompositeCard,
 } from "./insert";
 import { blobToDataURL, uploadAsset } from "./scene-assets";
 
@@ -74,11 +76,12 @@ export type CanvasSelection = {
 };
 
 export type OpenElementRequest = {
-  kind: "doc" | "video" | "file";
+  kind: "doc" | "video" | "file" | "composite";
   id: string;
   seq: number;
   name?: string;
   mime?: string;
+  composite?: CompositeCardData;
 };
 
 type AssetPanelProps = {
@@ -131,7 +134,10 @@ export function AssetPanel({
     name: string;
     mime: string;
   } | null>(null);
-  const [compositeOpen, setCompositeOpen] = useState(false);
+  const [compositeMode, setCompositeMode] = useState<{
+    elementId?: string;
+    data?: CompositeCardData;
+  } | null>(null);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +182,16 @@ export function AssetPanel({
   // 双击画布卡片时由画布父组件触发
   useEffect(() => {
     if (!openRequest) return;
+
+    if (openRequest.kind === "composite") {
+      setTab("insert");
+      setCompositeMode({
+        elementId: openRequest.id,
+        data: openRequest.composite,
+      });
+      return;
+    }
+
     setTab("docs");
     if (openRequest.kind === "doc") {
       void openDoc(openRequest.id);
@@ -553,7 +569,7 @@ export function AssetPanel({
               <InsertTile
                 label="组合卡片"
                 icon={<LayoutPanelTop />}
-                onClick={() => setCompositeOpen(true)}
+                onClick={() => setCompositeMode({})}
               />
               <InsertTile
                 label="分组"
@@ -741,12 +757,26 @@ export function AssetPanel({
 
       {/* 组合卡片：标题 + 字段 + 关联文档 */}
       <CompositeCardDialog
-        open={compositeOpen}
-        onOpenChange={setCompositeOpen}
+        open={Boolean(compositeMode)}
+        initial={compositeMode?.data}
+        onOpenChange={(open) => !open && setCompositeMode(null)}
         documents={docs.map((doc) => ({ id: doc.id, title: doc.title }))}
-        onCreate={(input) => {
-          withApi((api) => insertCompositeCard(api, input));
-          toast.success("组合卡片已插入");
+        onSubmit={(input) => {
+          const editingId = compositeMode?.elementId;
+          if (editingId) {
+            withApi(async (api) => {
+              const updated = await updateCompositeCard(api, editingId, input);
+              if (updated) toast.success("组合卡片已更新");
+            });
+          } else {
+            withApi((api) => insertCompositeCard(api, input));
+            toast.success("组合卡片已插入");
+          }
+          setCompositeMode(null);
+        }}
+        onOpenDocument={(id) => {
+          setCompositeMode(null);
+          void openDoc(id);
         }}
       />
 

@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, FileText, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import type { CompositeCardInput } from "@/components/canvas/editor/insert";
+import type { CompositeCardData } from "@/components/canvas/composite-card-render";
 
 type PanelDocument = {
   id: string;
@@ -16,31 +16,38 @@ type PanelDocument = {
 type CompositeCardDialogProps = {
   open: boolean;
   documents: PanelDocument[];
+  initial?: CompositeCardData | null;
   onOpenChange: (open: boolean) => void;
-  onCreate: (input: CompositeCardInput) => void;
+  onSubmit: (input: CompositeCardData) => void;
+  onOpenDocument?: (id: string) => void;
 };
 
 const DEFAULT_FIELDS = ["场景：", "人物：", "情节："];
 
-// 组合卡片：像故事卡一样把标题、字段和文档装进一个整体
+// 组合卡片编辑器：创建时也能继续编辑，旧卡片点开即可追加或删除成员
 export function CompositeCardDialog({
   open,
   documents,
+  initial,
   onOpenChange,
-  onCreate,
+  onSubmit,
+  onOpenDocument,
 }: CompositeCardDialogProps) {
   const [title, setTitle] = useState("1. 新故事");
   const [fields, setFields] = useState<string[]>([...DEFAULT_FIELDS]);
   const [docId, setDocId] = useState("");
   const [busy, setBusy] = useState(false);
+  const editing = Boolean(initial);
 
   useEffect(() => {
     if (!open) return;
-    setTitle("1. 新故事");
-    setFields([...DEFAULT_FIELDS]);
-    setDocId("");
+    setTitle(initial?.title || "1. 新故事");
+    setFields(
+      initial?.fields?.length ? [...initial.fields] : [...DEFAULT_FIELDS]
+    );
+    setDocId(initial?.document?.id || "");
     setBusy(false);
-  }, [open]);
+  }, [open, initial]);
 
   function updateField(index: number, value: string) {
     setFields((previous) =>
@@ -56,14 +63,24 @@ export function CompositeCardDialog({
     setFields((previous) => previous.filter((_, fieldIndex) => fieldIndex !== index));
   }
 
-  async function createCard() {
+  function moveField(index: number, delta: number) {
+    setFields((previous) => {
+      const target = index + delta;
+      if (target < 0 || target >= previous.length) return previous;
+      const next = [...previous];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  async function submitCard() {
     const nextTitle = title.trim();
     if (!nextTitle) {
       toast.error("请填写卡片标题");
       return;
     }
 
-    let document: CompositeCardInput["document"] = null;
+    let document: CompositeCardData["document"] = null;
     if (docId) {
       setBusy(true);
       try {
@@ -89,7 +106,7 @@ export function CompositeCardDialog({
       }
     }
 
-    onCreate({
+    onSubmit({
       title: nextTitle,
       fields: fields.map((field) => field.trim()).filter(Boolean),
       document,
@@ -102,15 +119,15 @@ export function CompositeCardDialog({
       open={open}
       onOpenChange={onOpenChange}
       size="lg"
-      title="新建组合卡片"
-      description="标题、字段和关联文档会打包成一个整体，拖动时一起移动"
+      title={editing ? "编辑组合卡片" : "新建组合卡片"}
+      description="标题、字段和关联文档会打包成一张卡片，只能整张移动，不会散开"
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             取消
           </Button>
-          <Button variant="primary" onClick={() => void createCard()} loading={busy}>
-            创建卡片
+          <Button variant="primary" onClick={() => void submitCard()} loading={busy}>
+            {editing ? "保存修改" : "创建卡片"}
           </Button>
         </>
       }
@@ -129,7 +146,7 @@ export function CompositeCardDialog({
 
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-[12px] font-medium text-ink">字段</label>
+            <label className="text-[12px] font-medium text-ink">成员字段</label>
             <button
               type="button"
               onClick={addField}
@@ -137,12 +154,12 @@ export function CompositeCardDialog({
               disabled={busy}
             >
               <Plus className="h-3.5 w-3.5" />
-              添加字段
+              添加成员
             </button>
           </div>
           <div className="space-y-2">
             {fields.map((field, index) => (
-              <div key={index} className="flex items-center gap-2">
+              <div key={index} className="flex items-center gap-1.5">
                 <Input
                   value={field}
                   onChange={(event) => updateField(index, event.target.value)}
@@ -151,9 +168,27 @@ export function CompositeCardDialog({
                 />
                 <button
                   type="button"
+                  onClick={() => moveField(index, -1)}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-ink disabled:opacity-30"
+                  aria-label="上移成员"
+                  disabled={busy || index === 0}
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveField(index, 1)}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-ink disabled:opacity-30"
+                  aria-label="下移成员"
+                  disabled={busy || index === fields.length - 1}
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => removeField(index)}
                   className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-danger/10 hover:text-danger"
-                  aria-label="删除字段"
+                  aria-label="删除成员"
                   disabled={busy}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -162,7 +197,7 @@ export function CompositeCardDialog({
             ))}
             {fields.length === 0 ? (
               <p className="rounded-lg border border-dashed border-line px-3 py-3 text-[12px] text-faint">
-                还没有字段，点右上角“添加字段”
+                还没有成员，点右上角“添加成员”
               </p>
             ) : null}
           </div>
@@ -170,22 +205,35 @@ export function CompositeCardDialog({
 
         <div>
           <label className="mb-1.5 block text-[12px] font-medium text-ink">关联文档</label>
-          <select
-            value={docId}
-            onChange={(event) => setDocId(event.target.value)}
-            disabled={busy}
-            className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-[13px] text-ink outline-none transition focus:border-brand"
-          >
-            <option value="">不关联文档</option>
-            {documents.map((doc) => (
-              <option key={doc.id} value={doc.id}>
-                {doc.title}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={docId}
+              onChange={(event) => setDocId(event.target.value)}
+              disabled={busy}
+              className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-[13px] text-ink outline-none transition focus:border-brand"
+            >
+              <option value="">不关联文档</option>
+              {documents.map((doc) => (
+                <option key={doc.id} value={doc.id}>
+                  {doc.title}
+                </option>
+              ))}
+            </select>
+            {docId && onOpenDocument ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onOpenDocument(docId)}
+                disabled={busy}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                打开
+              </Button>
+            ) : null}
+          </div>
           <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-faint">
             <FileText className="h-3.5 w-3.5" />
-            关联后卡片底部会出现文档条目，单击即可打开
+            关联后卡片底部显示文档条目，点卡片后可在这里继续编辑
           </p>
         </div>
       </div>

@@ -34,7 +34,8 @@ import type { AppUser, DocumentDTO, SceneData } from "@/lib/types";
 import { CollabConnection, type CollabStatus } from "@/lib/collab/client";
 import { SceneBinding } from "./scene-binding";
 import { fetchAssetDataURL, hydrateSceneFiles, uploadAsset } from "./scene-assets";
-import { insertDocCard, insertFileCard, insertVideoCard, syncFrameChildren } from "./insert";
+import { insertDocCard, insertFileCard, insertVideoCard, migrateCompositeCards, syncFrameChildren } from "./insert";
+import { parseCompositeCardData, type CompositeCardData } from "@/components/canvas/composite-card-render";
 import {
   AssetPanel,
   type CanvasSelection,
@@ -107,13 +108,21 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
   const canvasWrapRef = useRef<HTMLDivElement>(null);
   const processDroppedFilesRef = useRef<(files: File[]) => Promise<void>>(async () => {});
   const lastCanvasHitRef = useRef<{
-    kind: "doc" | "video" | "file";
+    kind: "doc" | "video" | "file" | "composite";
     id: string;
     name?: string;
     mime?: string;
+    composite?: CompositeCardData;
   } | null>(null);
+  const compositeMigratedRef = useRef(false);
   const canvasPressRef = useRef<{
-    hit: { kind: "doc" | "video" | "file"; id: string; name?: string; mime?: string } | null;
+    hit: {
+      kind: "doc" | "video" | "file" | "composite";
+      id: string;
+      name?: string;
+      mime?: string;
+      composite?: CompositeCardData;
+    } | null;
     x: number;
     y: number;
     time: number;
@@ -337,6 +346,19 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         viewBackgroundColor: appState.viewBackgroundColor,
       });
 
+      // 旧版组合卡片是多个元素拼起来的，首次加载时迁移成单张图片
+      if (
+        !compositeMigratedRef.current &&
+        apiRef.current &&
+        elements.some(
+          (element: any) =>
+            element.type === "text" && /^\d+\s*个字段/.test(element.text || "")
+        )
+      ) {
+        compositeMigratedRef.current = true;
+        void migrateCompositeCards(apiRef.current);
+      }
+
       // 同步选中元素里的文档/视频卡片信息
       const selectedIds = Object.keys(appState.selectedElementIds || {}).filter(
         (id) => appState.selectedElementIds[id]
@@ -345,7 +367,9 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
 
       if (selectedIds.length === 1) {
         const element = elements.find((item) => item.id === selectedIds[0]) as any;
-        if (element?.customData?.mbDocId) {
+        if (element?.customData?.mbComposite) {
+          updateSelection(null);
+        } else if (element?.customData?.mbDocId) {
           updateSelection({ docId: element.customData.mbDocId, docTitle: element.customData.mbDocTitle });
         } else if (element?.customData?.mbVideoAssetId) {
           updateSelection({
@@ -391,8 +415,15 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         const docElement = hitElement?.customData?.mbDocId ? hitElement : null;
         const videoElement = hitElement?.customData?.mbVideoAssetId ? hitElement : null;
         const fileElement = hitElement?.customData?.mbFileAssetId ? hitElement : null;
+        const compositeElement = hitElement?.customData?.mbComposite ? hitElement : null;
 
-        lastCanvasHitRef.current = docElement
+        lastCanvasHitRef.current = compositeElement
+          ? {
+              kind: "composite",
+              id: compositeElement.id,
+              composite: parseCompositeCardData(compositeElement.customData) || undefined,
+            }
+          : docElement
           ? { kind: "doc", id: docElement.customData.mbDocId }
           : videoElement
             ? { kind: "video", id: videoElement.customData.mbVideoAssetId }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LayoutGrid, Loader2, PenLine, Sparkles, Users, Wand2 } from "lucide-react";
 import { BrandMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
@@ -35,7 +34,6 @@ const features = [
 ];
 
 export function LoginScreen({ nextPath, appName }: LoginScreenProps) {
-  const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
@@ -63,8 +61,8 @@ export function LoginScreen({ nextPath, appName }: LoginScreenProps) {
         return;
       }
 
-      router.replace(nextPath);
-      router.refresh();
+      // 登录成功后直接整页跳转，避免 App Router 过渡在开发态卡住
+      window.location.replace(nextPath);
     } catch {
       setError("网络异常，请检查服务是否已启动");
       setPending(false);

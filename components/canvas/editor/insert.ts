@@ -2,6 +2,10 @@
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { AssetDTO, DocumentDTO } from "@/lib/types";
+import {
+  renderCompositeCard,
+  type CompositeCardData,
+} from "@/components/canvas/composite-card-render";
 import { readImageSize } from "./scene-assets";
 
 // 当前视口中心对应的画布坐标
@@ -379,188 +383,182 @@ export function insertFrame(api: ExcalidrawImperativeAPI) {
   });
 }
 
-// 组合卡片：标题 + 字段列表 + 关联文档，整体作为一个分组移动
-export type CompositeCardInput = {
-  title: string;
-  fields: string[];
-  document?: {
-    id: string;
-    title: string;
-    words?: number;
-  } | null;
-};
+// 组合卡片的数据与图片元素：整张卡是一个 image，不会散成多个可独立拖动的元素
+export type CompositeCardInput = CompositeCardData;
 
+async function buildCompositeImage(
+  api: ExcalidrawImperativeAPI,
+  data: CompositeCardData,
+  x: number,
+  y: number
+) {
+  const rendered = renderCompositeCard(data);
+  const fileId = crypto.randomUUID();
+  api.addFiles([
+    {
+      id: fileId,
+      dataURL: rendered.dataURL,
+      mimeType: "image/svg+xml",
+      created: Date.now(),
+      lastRetrieved: Date.now(),
+    } as any,
+  ]);
+
+  const built = await build([
+    {
+      type: "image",
+      fileId,
+      x,
+      y,
+      width: rendered.width,
+      height: rendered.height,
+    },
+  ]);
+
+  const image = built[0] as any;
+  image.customData = {
+    mbComposite: "1",
+    mbCompositeData: JSON.stringify(data),
+  };
+  return image;
+}
+
+// 按视口中心插入组合卡片
 export async function insertCompositeCard(
   api: ExcalidrawImperativeAPI,
   input: CompositeCardInput
 ) {
-  const width = 420;
-  const headerHeight = 100;
-  const fieldHeight = 58;
-  const fieldGap = 8;
-  const docHeight = input.document ? 78 : 0;
-  const height =
-    headerHeight + input.fields.length * (fieldHeight + fieldGap) + docHeight + 24;
-
-  const center = cascadeCenter(api, width, height);
-  const x = center.x - width / 2;
-  const y = center.y - height / 2;
-  const groupId = crypto.randomUUID();
-  const contentWidth = width - 80;
-
-  const skeletons: any[] = [
-    {
-      type: "rectangle",
-      x,
-      y,
-      width,
-      height,
-      backgroundColor: "#ffffff",
-      fillStyle: "solid",
-      strokeColor: "#dee2e6",
-      strokeWidth: 1.5,
-      roundness: { type: 3 },
-    },
-    {
-      type: "text",
-      x: x + 24,
-      y: y + 20,
-      width: width - 48,
-      text: input.title || "未命名组合",
-      fontSize: 22,
-      fontFamily: 2,
-      textAlign: "center",
-      strokeColor: "#1e1e1e",
-    },
-    {
-      type: "text",
-      x: x + 24,
-      y: y + 56,
-      width: width - 48,
-      text: `${input.fields.length} 个字段${input.document ? " · 1 个文档" : ""}`,
-      fontSize: 13,
-      fontFamily: 2,
-      textAlign: "center",
-      strokeColor: "#868e96",
-    },
-  ];
-
-  input.fields.forEach((field, index) => {
-    const rowY = y + headerHeight + index * (fieldHeight + fieldGap);
-    skeletons.push({
-      type: "rectangle",
-      x: x + 20,
-      y: rowY,
-      width: width - 40,
-      height: fieldHeight,
-      backgroundColor: "#ffffff",
-      fillStyle: "solid",
-      strokeColor: "#e9ecef",
-      strokeWidth: 1,
-      roundness: { type: 2 },
-    });
-    skeletons.push({
-      type: "text",
-      x: x + 36,
-      y: rowY + 16,
-      width: contentWidth,
-      text: field || "填写内容",
-      fontSize: 15,
-      fontFamily: 2,
-      strokeColor: "#343a40",
-    });
-  });
-
-  const built = await build(skeletons);
-
-  // convert 对 text 的宽度处理不一致，这里强制标题居中、副标题左对齐
-  const titleElement = built[1] as any;
-  if (titleElement?.type === "text") {
-    titleElement.x = x + 24;
-    titleElement.width = width - 48;
-    titleElement.textAlign = "center";
-  }
-  const metaElement = built[2] as any;
-  if (metaElement?.type === "text") {
-    metaElement.x = x + 24;
-    metaElement.width = width - 48;
-    metaElement.textAlign = "left";
-  }
-
-  const docRowY = y + headerHeight + input.fields.length * (fieldHeight + fieldGap);
-  const docSkeletons: any[] = input.document
-    ? [
-        {
-          type: "rectangle",
-          x: x + 20,
-          y: docRowY,
-          width: width - 40,
-          height: 70,
-          backgroundColor: "#f8f9fa",
-          fillStyle: "solid",
-          strokeColor: "#e9ecef",
-          strokeWidth: 1,
-          roundness: { type: 2 },
-        },
-        {
-          type: "text",
-          x: x + 36,
-          y: docRowY + 20,
-          text: "📄",
-          fontSize: 22,
-          fontFamily: 2,
-          strokeColor: "#495057",
-        },
-        {
-          type: "text",
-          x: x + 76,
-          y: docRowY + 12,
-          width: width - 120,
-          text: input.document.title,
-          fontSize: 15,
-          fontFamily: 2,
-          strokeColor: "#343a40",
-        },
-        {
-          type: "text",
-          x: x + 76,
-          y: docRowY + 38,
-          width: width - 120,
-          text: `${input.document.words ?? 0} 字 · 点击打开`,
-          fontSize: 12,
-          fontFamily: 2,
-          strokeColor: "#868e96",
-        },
-      ]
-    : [];
-
-  const docElements = docSkeletons.length > 0 ? await build(docSkeletons) : [];
-  if (input.document && docElements.length > 0) {
-    (docElements[0] as any).customData = {
-      mbDocId: input.document.id,
-      mbDocTitle: input.document.title,
-    };
-    (docElements[2] as any).customData = {
-      mbDocId: input.document.id,
-      mbDocTitle: input.document.title,
-    };
-  }
-
-  const allElements = [...built, ...docElements];
-
-  // 统一分组，拖动任意成员即可整体移动
-  for (const element of allElements) {
-    (element as any).groupIds = [groupId];
-  }
-
-  const selectedElementIds: Record<string, boolean> = {};
-  for (const element of allElements) selectedElementIds[(element as any).id] = true;
+  const rendered = renderCompositeCard(input);
+  const center = cascadeCenter(api, rendered.width, rendered.height);
+  const image = await buildCompositeImage(
+    api,
+    input,
+    center.x - rendered.width / 2,
+    center.y - rendered.height / 2
+  );
 
   api.updateScene({
-    elements: [...api.getSceneElements(), ...allElements] as any,
-    appState: { selectedElementIds } as any,
+    elements: [...api.getSceneElements(), image] as any,
+    appState: { selectedElementIds: { [image.id]: true } } as any,
     captureUpdate: "IMMEDIATELY",
   });
+}
+
+// 更新已有组合卡片：重新生成图片，并保留原位置
+export async function updateCompositeCard(
+  api: ExcalidrawImperativeAPI,
+  elementId: string,
+  input: CompositeCardInput
+): Promise<boolean> {
+  const elements = api.getSceneElements();
+  const target = elements.find((element: any) => element.id === elementId) as any;
+  if (!target) return false;
+
+  const rendered = renderCompositeCard(input);
+  const fileId = crypto.randomUUID();
+  api.addFiles([
+    {
+      id: fileId,
+      dataURL: rendered.dataURL,
+      mimeType: "image/svg+xml",
+      created: Date.now(),
+      lastRetrieved: Date.now(),
+    } as any,
+  ]);
+
+  const next = elements.map((element: any) => {
+    if (element.id !== elementId) return element;
+    return {
+      ...element,
+      fileId,
+      width: rendered.width,
+      height: rendered.height,
+      customData: {
+        ...(element.customData || {}),
+        mbComposite: "1",
+        mbCompositeData: JSON.stringify(input),
+      },
+      version: element.version + 1,
+      versionNonce: Math.floor(Math.random() * 2 ** 31),
+    };
+  });
+
+  api.updateScene({ elements: next as any, captureUpdate: "IMMEDIATELY" });
+  return true;
+}
+
+// 把旧版由多个元素拼起来的组合卡片迁移成单张图片
+export async function migrateCompositeCards(api: ExcalidrawImperativeAPI): Promise<number> {
+  const elements = api.getSceneElements();
+  const groups = new Map<string, any[]>();
+
+  for (const element of elements as any[]) {
+    if (element.type === "frame") continue;
+    const groupId = element.groupIds?.[0];
+    if (!groupId) continue;
+    const list = groups.get(groupId) || [];
+    list.push(element);
+    groups.set(groupId, list);
+  }
+
+  const removals = new Set<string>();
+  const replacements: any[] = [];
+
+  for (const group of groups.values()) {
+    const texts = group.filter((element) => element.type === "text");
+    const meta = texts.find((element) => /^\d+\s*个字段/.test(element.text || ""));
+    if (!meta) continue;
+
+    const title = texts
+      .filter((element) => element !== meta && element.y < meta.y && (element.text || "").trim())
+      .sort((a, b) => (b.fontSize || 0) - (a.fontSize || 0))[0];
+    if (!title) continue;
+
+    const documentElement = group.find((element) => element.customData?.mbDocId);
+    const docTitle = documentElement?.customData?.mbDocTitle;
+    const wordsText = texts.find((element) => /\d+\s*字/.test(element.text || ""));
+    const words = Number((wordsText?.text?.match(/(\d+)\s*字/) || [])[1] || 0);
+
+    const fields = texts
+      .filter((element) => {
+        const value = (element.text || "").trim();
+        if (!value) return false;
+        if (element === title || element === meta || element === wordsText) return false;
+        if (value === "📄") return false;
+        if (docTitle && value === docTitle) return false;
+        return true;
+      })
+      .map((element) => (element.text || "").trim());
+
+    const minX = Math.min(...group.map((element) => element.x));
+    const minY = Math.min(...group.map((element) => element.y));
+    const data: CompositeCardData = {
+      title: (title.text || "未命名组合").trim(),
+      fields,
+      document: documentElement
+        ? {
+            id: documentElement.customData.mbDocId,
+            title: docTitle || documentElement.text || "关联文档",
+            words,
+          }
+        : null,
+    };
+
+    const image = await buildCompositeImage(api, data, minX, minY);
+    replacements.push(image);
+    for (const element of group) removals.add(element.id);
+  }
+
+  if (replacements.length === 0) return 0;
+
+  api.updateScene({
+    elements: [
+      ...elements.filter((element: any) => !removals.has(element.id)),
+      ...replacements,
+    ] as any,
+    captureUpdate: "IMMEDIATELY",
+  });
+  return replacements.length;
 }
 
 // 把选中的元素分组，拖动任意成员即可整体移动
