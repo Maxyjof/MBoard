@@ -89,6 +89,22 @@ function appendElements(
 }
 
 // 延迟加载 Excalidraw，避免服务端渲染时访问 window
+// crypto.randomUUID 仅在安全上下文（https 或 localhost）可用，http 访问时会缺失，这里提供兼容实现
+function uuid(): string {
+  const cryptoObj = typeof globalThis !== "undefined" ? (globalThis.crypto as Crypto | undefined) : undefined;
+  if (cryptoObj && typeof cryptoObj.randomUUID === "function") return cryptoObj.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (cryptoObj && typeof cryptoObj.getRandomValues === "function") {
+    cryptoObj.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+}
+
 async function build(skeletons: any[]) {
   const { convertToExcalidrawElements } = await import("@excalidraw/excalidraw");
   return convertToExcalidrawElements(skeletons, { regenerateIds: false });
@@ -153,7 +169,7 @@ export async function insertShape(
 // 插入图片（资源已上传，dataURL 直接注入 Excalidraw）
 export async function insertImage(api: ExcalidrawImperativeAPI, asset: AssetDTO, dataURL: string) {
   const size = await readImageSize(dataURL);
-  const fileId = crypto.randomUUID();
+  const fileId = uuid();
   api.addFiles([
     {
       id: fileId,
@@ -239,7 +255,7 @@ export async function insertTableCard(
   const height = (table.rows.length + 1) * rowHeight;
   const center = fixedCenter || cascadeCenter(api, width, height);
   const svg = renderTableSvg(table, width, height, columnWidth, rowHeight);
-  const fileId = crypto.randomUUID();
+  const fileId = uuid();
   api.addFiles([{ id: fileId, dataURL: svgDataURL(svg), mimeType: "image/svg+xml", created: Date.now(), lastRetrieved: Date.now() } as any]);
   const elements = await build([{ type: "image", fileId, x: center.x - width / 2, y: center.y - height / 2, width, height }]);
   appendElements(api, elements, { mbTableId: doc.id, mbTableTitle: doc.title });
@@ -377,7 +393,7 @@ export async function insertDocCard(
 export async function insertFileCard(api: ExcalidrawImperativeAPI, asset: AssetDTO) {
   const rendered = renderFileCard(asset);
   const center = cascadeCenter(api, rendered.width, rendered.height);
-  const fileId = crypto.randomUUID();
+  const fileId = uuid();
   api.addFiles([
     {
       id: fileId,
@@ -472,7 +488,7 @@ export function insertFrame(api: ExcalidrawImperativeAPI) {
   const height = 520;
   const center = cascadeCenter(api, width, height);
   const frame: any = {
-    id: crypto.randomUUID(),
+    id: uuid(),
     type: "frame",
     x: center.x - width / 2,
     y: center.y - height / 2,
@@ -518,7 +534,7 @@ async function buildCompositeImage(
   y: number
 ) {
   const rendered = renderCompositeCard(data);
-  const fileId = crypto.randomUUID();
+  const fileId = uuid();
   api.addFiles([
     {
       id: fileId,
@@ -580,7 +596,7 @@ export async function updateCompositeCard(
   if (!target) return false;
 
   const rendered = renderCompositeCard(input);
-  const fileId = crypto.randomUUID();
+  const fileId = uuid();
   api.addFiles([
     {
       id: fileId,
@@ -751,7 +767,7 @@ export async function groupSelectedElements(api: ExcalidrawImperativeAPI): Promi
   );
   if (selected.length === 0) return false;
 
-  const groupId = crypto.randomUUID();
+  const groupId = uuid();
   const minX = Math.min(...selected.map((element) => element.x));
   const minY = Math.min(...selected.map((element) => element.y));
   const maxX = Math.max(...selected.map((element) => element.x + element.width));

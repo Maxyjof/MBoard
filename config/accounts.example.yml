@@ -1,0 +1,24 @@
+# MBoard 账号配置模板
+# 使用方法：复制本文件为 config/accounts.yml 后按需修改，重启服务生效
+#   cp config/accounts.example.yml config/accounts.yml
+#
+# 注意：config/accounts.yml 已被 .gitignore 忽略，属于本机私有配置，请勿提交到仓库。
+#
+# 密码支持两种写法（任选其一）：
+#   password: "your-password"      适合内网快速使用
+#   passwordHash: "$2b$10$..."     bcrypt 哈希，生产环境推荐
+# 生成哈希：npm run hash -- "你的密码"
+#
+# 登录后可以在「账号设置」里修改自己的显示名、光标颜色和密码
+# 用户修改后的值保存在数据库里，会覆盖这里的初始值
+#
+# color 用于协作光标和头像底色
+users:
+  - username: admin
+    password: "change-me"
+    displayName: "管理员"
+    color: "#6353f5"
+  - username: user2
+    password: "change-me"
+    displayName: "成员二"
+    color: "#0ea5e9"

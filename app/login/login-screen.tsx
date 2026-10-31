@@ -62,7 +62,11 @@ export function LoginScreen({ nextPath, appName }: LoginScreenProps) {
       }
 
       // 登录成功后直接整页跳转，避免 App Router 过渡在开发态卡住
-      window.location.replace(nextPath);
+      // 注意：window.location 属于原生 API，不会自动补 basePath 前缀，
+      // 若直接跳 /boards 会落到站点根域（被 nginx 转发给论坛后端），
+      // 因此从当前路径（形如 /mboard/login）反推前缀后再拼接
+      const basePath = window.location.pathname.replace(/\/login\/?$/, "");
+      window.location.replace(`${basePath}${nextPath}`);
     } catch {
       setError("网络异常，请检查服务是否已启动");
       setPending(false);

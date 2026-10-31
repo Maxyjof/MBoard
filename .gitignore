@@ -34,3 +34,13 @@ yarn-error.log*
 coverage/
 playwright-report/
 test-results/
+
+# ---- 私有配置与运行时数据（请勿提交） ----
+.env
+.env.*
+!.env.example
+config/accounts.yml
+config/accounts.local.yml
+docker-compose.override.yml
+data/
+uploads/

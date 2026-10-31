@@ -8,7 +8,6 @@ data
 *.tsbuildinfo
 npm-debug.log*
 docs
-scripts
 README.md
 Dockerfile
 docker-compose.yml

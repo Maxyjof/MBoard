@@ -8,7 +8,7 @@
 
 ### 账号与访问
 - 账号预置在 `config/accounts.yml`，支持明文密码或 bcrypt 哈希
-- 默认 4 个账号：maxy / tannami / fashi / tomato，密码均为 `123456`
+- 仓库只提供账号模板 `config/accounts.example.yml`，真实账号写在本地 `config/accounts.yml`（已被忽略）
 - JWT + HttpOnly Cookie 会话，中间件统一拦截未登录请求
 - 登录用户权限平等，所有看板、画板、文档、附件全局共享
 - **账号设置**：左下角头像菜单进入，可修改自己的显示名和登录密码
@@ -96,23 +96,19 @@
 环境：Node.js ≥ 20、npm。
 
 ```bash
-cd D:\JS_Workspace\MBoard
+cd MBoard
 
 npm install
-copy .env.example .env     # macOS / Linux: cp .env.example .env
+cp .env.example .env          # Windows PowerShell: copy .env.example .env
+cp config/accounts.example.yml config/accounts.yml
 
 npm run setup              # 生成 Prisma Client、建表、写入演示数据
 npm run dev                # http://localhost:3000
 ```
 
-默认账号（见 `config/accounts.yml`，上线前务必修改）：
+账号来自你本地的 `config/accounts.yml`（已被 `.gitignore` 忽略，不会进入仓库）。
 
-| 用户名 | 密码 | 显示名 |
-| --- | --- | --- |
-| maxy | 123456 | Maxy |
-| tannami | 123456 | Tannami |
-| fashi | 123456 | Fashi |
-| tomato | 123456 | Tomato |
+仓库只提供模板 `config/accounts.example.yml`，内含 `admin` / `user2` 两个占位账号，密码均为 `change-me`，请在首次启动前改成自己的账号和密码。
 
 > PowerShell 默认禁止运行 `npm.ps1` 时，用 `cmd /c "npm.cmd run dev"`。
 
@@ -121,8 +117,9 @@ npm run dev                # http://localhost:3000
 ## Docker 部署
 
 ```bash
-copy .env.example .env
-# 修改 .env 里的 AUTH_SECRET 和 config/accounts.yml 里的账号
+cp .env.example .env                          # Windows PowerShell: copy .env.example .env
+cp config/accounts.example.yml config/accounts.yml
+# 修改 .env 里的 AUTH_SECRET，以及 config/accounts.yml 里的账号密码
 
 docker compose up -d --build
 # 打开 http://服务器IP:3000
@@ -140,9 +137,9 @@ docker compose up -d --build
 ```yaml
 # config/accounts.yml
 users:
-  - username: maxy
+  - username: admin
     passwordHash: "$2b$10$..."   # 推荐：bcrypt 哈希
-    displayName: "Maxy"
+    displayName: "管理员"
     color: "#6353f5"             # 头像底色（光标颜色由画布按用户分配）
 ```
 
