@@ -133,6 +133,8 @@ export function Sidebar({
             collapsed={collapsed && !mobile}
             onClick={onNavigate}
           />
+          {/* 操作记录跟导航放在一起，不再悬浮在左下角遮挡用户菜单 */}
+          <WorkHistory collapsed={collapsed && !mobile} />
         </nav>
 
         {!collapsed || mobile ? (
@@ -198,10 +200,6 @@ export function Sidebar({
         ) : (
           <div className="flex-1" />
         )}
-
-        <div className={cn("border-t border-line p-2", collapsed && !mobile && "flex justify-center")}>
-          <WorkHistory collapsed={collapsed && !mobile} />
-        </div>
 
         <div className={cn("border-t border-line p-2", collapsed && !mobile && "flex justify-center")}>
           <UserMenu
