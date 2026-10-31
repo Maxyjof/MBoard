@@ -5,6 +5,7 @@ import { MAX_THUMBNAIL_BYTES, removeAsset, saveAsset, UploadError } from "@/lib/
 type RouteContext = { params: Promise<{ id: string }> };
 
 // 上传画板缩略图：仅接受 PNG，≤2MB，成功后更新 thumbnailAssetId
+// 缩略图是系统的自动副作用，不写入操作历史，避免淹没用户自己的操作
 export async function POST(request: Request, { params }: RouteContext) {
   return withSession(async (session) => {
     const { id } = await params;

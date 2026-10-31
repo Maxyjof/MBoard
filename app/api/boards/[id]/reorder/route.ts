@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { LIST_MODELS } from "@/lib/history/engine.mjs";
 // 拖拽后的批量排序：校验归属后用事务一次性写入
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -14,7 +16,7 @@ function isOrderBase(item: unknown): item is { id: string; sort: number } {
   return typeof record.id === "string" && Number.isInteger(record.sort) && (record.sort as number) >= 0;
 }
 
-export async function POST(request: Request, { params }: RouteContext) {
+async function handlePOST(request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -92,3 +94,5 @@ export async function POST(request: Request, { params }: RouteContext) {
     return serverError(error);
   }
 }
+
+export const POST = withHistory("调整看板排序", handlePOST, LIST_MODELS);

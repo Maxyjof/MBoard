@@ -23,8 +23,7 @@ RUN npm config set registry https://registry.npmmirror.com \
 
 COPY . .
 
-RUN mkdir -p public/vditor \
-  && cp -r node_modules/vditor/dist public/vditor/ \
+RUN node scripts/copy-vditor.mjs \
   && npx prisma generate \
   && npx next build \
   && npm prune --omit=dev

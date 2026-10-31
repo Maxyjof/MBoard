@@ -7,7 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
+    "predev": "node scripts/copy-vditor.mjs",
     "dev": "node server.mjs --dev",
+    "prebuild": "node scripts/copy-vditor.mjs",
     "build": "prisma generate && next build",
     "start": "node server.mjs",
     "typecheck": "tsc --noEmit",

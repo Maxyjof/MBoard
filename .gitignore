@@ -19,6 +19,9 @@ data/
 *.db-wal
 *.db-shm
 
+# vditor 静态资源由 scripts/copy-vditor.mjs 从 node_modules 复制，不提交
+public/vditor/
+
 # env
 .env*.local
 .env

@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { BOARD_CARD_MODELS, CARD_MODELS } from "@/lib/history/engine.mjs";
 // 单张卡片：更新（标题/描述/标签/截止日期/归档/封面）、删除
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -22,7 +24,7 @@ type CardUpdateData = {
   coverAssetId?: string | null;
 };
 
-export async function PATCH(request: Request, { params }: RouteContext) {
+async function handlePATCH(request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -109,28 +111,29 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       data.coverAssetId = coverAssetId;
     }
 
-    const card = await prisma.boardCard.update({
-      where: { id },
-      data,
-      include: {
-        attachments: {
-          orderBy: { createdAt: "asc" },
-          include: { asset: true },
-        },
-      },
+    const card = await prisma.$transaction(async (tx) => {
+      if (data.labels !== undefined) {
+        const requested = normalizeLabels(JSON.parse(data.labels))!;
+        const available = await tx.boardLabel.findMany({ where: { boardId: existing.list.boardId } });
+        const byName = new Map(available.map(label => [label.name, label]));
+        if (requested.some(label => !byName.has(label.name))) return null;
+        data.labels = JSON.stringify(requested.map(label => ({ name: label.name, color: byName.get(label.name)!.color })));
+      }
+      const updated = await tx.boardCard.update({
+        where: { id }, data,
+        include: { attachments: { orderBy: { createdAt: "asc" }, include: { asset: true } } },
+      });
+      await tx.board.update({ where: { id: existing.list.boardId }, data: { updatedAt: new Date() } });
+      return updated;
     });
-    await prisma.board.update({
-      where: { id: existing.list.boardId },
-      data: { updatedAt: new Date() },
-    });
-
+    if (!card) return fail("标签已被修改或删除，请刷新看板后重试", 409);
     return ok({ card: toCardDTO(card) });
   } catch (error) {
     return serverError(error);
   }
 }
 
-export async function DELETE(_request: Request, { params }: RouteContext) {
+async function handleDELETE(_request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -153,3 +156,7 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     return serverError(error);
   }
 }
+
+export const PATCH = withHistory("修改卡片", handlePATCH, BOARD_CARD_MODELS);
+
+export const DELETE = withHistory("删除卡片", handleDELETE, CARD_MODELS);

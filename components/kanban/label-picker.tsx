@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   LABEL_PALETTE,
-  LABEL_PRESETS,
   MAX_LABELS,
   labelStyle,
 } from "@/lib/kanban";
@@ -18,10 +17,12 @@ import type { CardLabel } from "@/lib/types";
 type LabelPickerProps = {
   labels: CardLabel[];
   onChange: (labels: CardLabel[]) => void;
+  available: CardLabel[];
+  onCreate: (name: string, color: string) => Promise<CardLabel>;
   disabled?: boolean;
 };
 
-export function LabelPicker({ labels, onChange, disabled = false }: LabelPickerProps) {
+export function LabelPicker({ labels, available, onCreate, onChange, disabled = false }: LabelPickerProps) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(LABEL_PALETTE[0]);
 
@@ -41,7 +42,7 @@ export function LabelPicker({ labels, onChange, disabled = false }: LabelPickerP
     onChange([...labels, label]);
   }
 
-  function addCustom() {
+  async function addCustom() {
     const trimmed = name.trim().slice(0, 20);
     if (!trimmed) return;
     if (hasLabel({ name: trimmed, color })) {
@@ -52,8 +53,7 @@ export function LabelPicker({ labels, onChange, disabled = false }: LabelPickerP
       toast.error(`最多添加 ${MAX_LABELS} 个标签`);
       return;
     }
-    onChange([...labels, { name: trimmed, color }]);
-    setName("");
+    try { const label = await onCreate(trimmed, color); onChange([...labels, label]); setName(""); } catch (error) { toast.error(error instanceof Error ? error.message : "添加标签失败"); }
   }
 
   return (
@@ -79,7 +79,7 @@ export function LabelPicker({ labels, onChange, disabled = false }: LabelPickerP
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        {LABEL_PRESETS.map((preset) => {
+        {available.map((preset) => {
           const active = hasLabel(preset);
           return (
             <button
@@ -108,7 +108,7 @@ export function LabelPicker({ labels, onChange, disabled = false }: LabelPickerP
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              addCustom();
+              void addCustom();
             }
           }}
           placeholder="自定义标签"
@@ -136,7 +136,7 @@ export function LabelPicker({ labels, onChange, disabled = false }: LabelPickerP
           size="sm"
           variant="secondary"
           disabled={disabled || !name.trim()}
-          onClick={addCustom}
+          onClick={() => void addCustom()}
         >
           添加
         </Button>

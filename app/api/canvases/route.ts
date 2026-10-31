@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { CANVAS_MODELS } from "@/lib/history/engine.mjs";
 import { prisma } from "@/lib/prisma";
 import { ok, readJson, serverError, withSession } from "@/lib/http";
 import { canvasSelect, parseCanvasCreate, toCanvasSummary } from "./_shared";
@@ -18,7 +20,7 @@ export async function GET() {
 }
 
 // 新建画板
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   return withSession(async (session) => {
     const parsed = await readJson(request, parseCanvasCreate);
     if ("error" in parsed) return parsed.error;
@@ -38,3 +40,5 @@ export async function POST(request: Request) {
     }
   });
 }
+
+export const POST = withHistory("新建画板", handlePOST, CANVAS_MODELS);

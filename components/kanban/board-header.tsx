@@ -1,7 +1,7 @@
 "use client";
 
 // 看板标题栏：展示标题与描述，提供新建列表与设置入口
-import { Plus, Settings2 } from "lucide-react";
+import { Plus, Settings2, Tags } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tip";
 import type { BoardDetail } from "@/lib/types";
@@ -10,9 +10,10 @@ type BoardHeaderProps = {
   board: BoardDetail;
   onCreateList: () => void;
   onOpenSettings: () => void;
+  onOpenLabels: () => void;
 };
 
-export function BoardHeader({ board, onCreateList, onOpenSettings }: BoardHeaderProps) {
+export function BoardHeader({ board, onCreateList, onOpenSettings, onOpenLabels }: BoardHeaderProps) {
   return (
     <header className="shrink-0 border-b border-line bg-surface px-3 py-3 sm:px-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -35,6 +36,7 @@ export function BoardHeader({ board, onCreateList, onOpenSettings }: BoardHeader
             <Plus className="h-3.5 w-3.5" />
             新建列表
           </Button>
+          <Tip label="标签管理"><button type="button" className="icon-btn" onClick={onOpenLabels} aria-label="标签管理"><Tags className="h-4 w-4" /></button></Tip>
           <Tip label="看板设置">
             <button
               type="button"

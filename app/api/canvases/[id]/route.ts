@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { CANVAS_ASSET_MODELS, CANVAS_MODELS } from "@/lib/history/engine.mjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { notFound, ok, readJson, serverError, withSession } from "@/lib/http";
@@ -27,7 +29,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
 }
 
 // 更新画板标题/描述
-export async function PATCH(request: Request, { params }: RouteContext) {
+async function handlePATCH(request: Request, { params }: RouteContext) {
   return withSession(async (session) => {
     const { id } = await params;
     const parsed = await readJson(request, parseCanvasUpdate);
@@ -48,7 +50,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 // 删除画板，同时清理只属于它的缩略图资源
-export async function DELETE(_request: Request, { params }: RouteContext) {
+async function handleDELETE(_request: Request, { params }: RouteContext) {
   return withSession(async () => {
     const { id } = await params;
 
@@ -72,3 +74,7 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     }
   });
 }
+
+export const PATCH = withHistory("修改画板", handlePATCH, CANVAS_MODELS);
+
+export const DELETE = withHistory("删除画板", handleDELETE, CANVAS_ASSET_MODELS);

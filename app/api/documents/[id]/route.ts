@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { DOCUMENT_MODELS } from "@/lib/history/engine.mjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { notFound, ok, readJson, serverError, withSession } from "@/lib/http";
@@ -34,7 +36,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
 }
 
 // 更新文档
-export async function PATCH(request: Request, { params }: RouteContext) {
+async function handlePATCH(request: Request, { params }: RouteContext) {
   return withSession(async () => {
     const { id } = await params;
     const parsed = await readJson(request, parseDocumentUpdate);
@@ -55,7 +57,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 // 删除文档
-export async function DELETE(_request: Request, { params }: RouteContext) {
+async function handleDELETE(_request: Request, { params }: RouteContext) {
   return withSession(async () => {
     const { id } = await params;
 
@@ -68,3 +70,7 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     }
   });
 }
+
+export const PATCH = withHistory("修改文档", handlePATCH, DOCUMENT_MODELS);
+
+export const DELETE = withHistory("删除文档", handleDELETE, DOCUMENT_MODELS);

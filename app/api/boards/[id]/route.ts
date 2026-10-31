@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { BOARD_MODELS, BOARD_TREE_MODELS } from "@/lib/history/engine.mjs";
 // 单个看板：详情（含列表与卡片）、更新、删除
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -48,7 +50,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
   }
 }
 
-export async function PATCH(request: Request, { params }: RouteContext) {
+async function handlePATCH(request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -94,7 +96,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: RouteContext) {
+async function handleDELETE(_request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -110,3 +112,7 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     return serverError(error);
   }
 }
+
+export const PATCH = withHistory("修改看板", handlePATCH, BOARD_MODELS);
+
+export const DELETE = withHistory("删除看板", handleDELETE, BOARD_TREE_MODELS);

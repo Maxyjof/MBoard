@@ -14,6 +14,9 @@ import {
   Download,
   FileJson,
   Image as ImageIcon,
+  History,
+  Undo2,
+  Redo2,
   Link2,
   Loader2,
   PanelRightClose,
@@ -33,6 +36,7 @@ import { cn } from "@/lib/utils";
 import type { AppUser, DocumentDTO, SceneData } from "@/lib/types";
 import { CollabConnection, type CollabStatus } from "@/lib/collab/client";
 import { SceneBinding } from "./scene-binding";
+import { CanvasHistory } from "./canvas-history";
 import { fetchAssetDataURL, hydrateSceneFiles, uploadAsset } from "./scene-assets";
 import {
   absorbElementIntoCompositeCard,
@@ -100,6 +104,46 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
   const tableSaveTimersRef = useRef<Map<string, number>>(new Map());
   const readyRef = useRef(false);
   const apiMountedRef = useRef(false);
+
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const historyBusyRef = useRef(false);
+
+  // 撤销/重做交给服务端校验：只能操作自己的记录，且元素最新执行者必须是本人
+  const changeHistory = useCallback(async (action: "undo" | "redo") => {
+    if (historyBusyRef.current) return;
+    if (!providerRef.current) {
+      toast.error("协作服务未连接，暂时不能撤销或重做");
+      return;
+    }
+    historyBusyRef.current = true;
+    setHistoryBusy(true);
+    try {
+      await providerRef.current.changeHistory(action);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "操作失败");
+    } finally {
+      historyBusyRef.current = false;
+      setHistoryBusy(false);
+    }
+  }, []);
+
+  // 只在画布上拦截快捷键，输入框和文本编辑保留浏览器原生撤销
+  useEffect(() => {
+    const handle = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !["z", "y"].includes(event.key.toLowerCase())) return;
+      if (historyOpen) return;
+      const target = event.target as HTMLElement;
+      if (target?.closest("input, textarea, [contenteditable=true]")) return;
+      if (apiRef.current?.getAppState().editingTextElement) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const redo = event.key.toLowerCase() === "y" || event.shiftKey;
+      void changeHistory(redo ? "redo" : "undo");
+    };
+    window.addEventListener("keydown", handle, true);
+    return () => window.removeEventListener("keydown", handle, true);
+  }, [changeHistory, historyOpen]);
 
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState<CollabStatus>("connecting");
@@ -402,6 +446,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       const binding = bindingRef.current;
       if (!binding || !readyRef.current) return;
 
+      apiRef.current?.history.clear();
       appStateRef.current = appState;
       binding.applyLocal(elements as any, {
         viewBackgroundColor: appState.viewBackgroundColor,
@@ -1134,6 +1179,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-bg">
+      {historyOpen && <CanvasHistory canvasId={canvas.id} onClose={() => setHistoryOpen(false)} />}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface px-2 sm:px-3">
         <Tip label="返回画板库">
           <Link href="/canvases" className="icon-btn" aria-label="返回画板库">
@@ -1200,6 +1246,34 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
           </div>
         ) : null}
 
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={historyBusy || historyOpen || status !== "connected"}
+          onClick={() => void changeHistory("undo")}
+          aria-label="撤销我的操作"
+        >
+          <Undo2 className="h-4 w-4" />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={historyBusy || historyOpen || status !== "connected"}
+          onClick={() => void changeHistory("redo")}
+          aria-label="重做我的操作"
+        >
+          <Redo2 className="h-4 w-4" />
+        </Button>
+        <Tip label="查看历史">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="查看历史"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <History className="h-4 w-4" />
+          </button>
+        </Tip>
         <Dropdown
           width={190}
           trigger={
@@ -1279,6 +1353,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
               onChange={handleChange as any}
               onPointerUpdate={handlePointerUpdate}
               isCollaborating
+              viewModeEnabled={historyOpen}
               langCode="zh-CN"
               theme={mode}
               name={title}
@@ -1289,7 +1364,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
                   loadScene: false,
                   saveAsImage: false,
                   toggleTheme: false,
-                  clearCanvas: true,
+                  clearCanvas: false,
                   changeViewBackgroundColor: true,
                 },
               }}

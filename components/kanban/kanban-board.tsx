@@ -1,7 +1,7 @@
 "use client";
 
 // 看板主体：持有列表状态，负责拖拽跨列移动与乐观更新回滚
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { LabelManager, type BoardLabel } from "@/components/kanban/label-manager";
 import { BoardHeader } from "@/components/kanban/board-header";
 import { BoardSettingsDialog } from "@/components/kanban/board-settings-dialog";
 import { CardDetailDrawer } from "@/components/kanban/card-detail-drawer";
@@ -63,6 +64,87 @@ export function KanbanBoard({
   const [openCardId, setOpenCardId] = useState<string | null>(initialCardId);
   const [savingOrder, setSavingOrder] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const [boardLabels, setBoardLabels] = useState<BoardLabel[]>([]);
+
+  // 标签表按看板独立维护，进入看板时加载一次
+  const loadBoardLabels = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/boards/${initialBoard.id}/labels`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "加载标签失败");
+      setBoardLabels(data.labels);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  }, [initialBoard.id]);
+
+  useEffect(() => {
+    void loadBoardLabels();
+  }, [loadBoardLabels]);
+
+  // 撤销/重做后重新拉取看板数据，比整页刷新更平滑
+  const reloadBoard = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/boards/${initialBoard.id}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "刷新看板失败");
+      setBoard(data.board);
+      setLists(data.lists);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  }, [initialBoard.id]);
+
+  useEffect(() => {
+    const handler = () => void reloadBoard();
+    window.addEventListener("mboard:history-changed", handler);
+    return () => window.removeEventListener("mboard:history-changed", handler);
+  }, [reloadBoard]);
+
+  async function labelRequest(method: string, body: object) {
+    const response = await fetch(`/api/boards/${initialBoard.id}/labels`, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "标签操作失败");
+    return data;
+  }
+
+  async function createBoardLabel(name: string, color: string): Promise<BoardLabel> {
+    const { label } = await labelRequest("POST", { name, color });
+    setBoardLabels((previous) => [...previous, label]);
+    return label;
+  }
+
+  // 标签改名/删除后同步更新看板里所有卡片的标签快照
+  function syncCardLabels(update: (labels: CardDTO["labels"]) => CardDTO["labels"]) {
+    setLists((previous) =>
+      previous.map((list) => ({
+        ...list,
+        cards: list.cards.map((card) => ({ ...card, labels: update(card.labels) })),
+      }))
+    );
+  }
+
+  async function editBoardLabel(previousLabel: BoardLabel, name: string, color: string) {
+    await labelRequest("PATCH", { id: previousLabel.id, name, color });
+    setBoardLabels((previous) =>
+      previous.map((label) => (label.id === previousLabel.id ? { ...label, name, color } : label))
+    );
+    syncCardLabels((labels) =>
+      labels.map((label) => (label.name === previousLabel.name ? { name, color } : label))
+    );
+  }
+
+  async function deleteBoardLabel(previousLabel: BoardLabel) {
+    await labelRequest("DELETE", { id: previousLabel.id });
+    setBoardLabels((previous) => previous.filter((label) => label.id !== previousLabel.id));
+    syncCardLabels((labels) => labels.filter((label) => label.name !== previousLabel.name));
+  }
+
 
   const [addListOpen, setAddListOpen] = useState(false);
   const [listTitle, setListTitle] = useState("");
@@ -261,6 +343,7 @@ export function KanbanBoard({
         board={board}
         onCreateList={() => setAddListOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenLabels={() => setLabelsOpen(true)}
       />
 
       <DndContext
@@ -300,7 +383,11 @@ export function KanbanBoard({
                     members={members}
                     disabled={savingOrder}
                     onOpenCard={handleOpenCard}
-                    onCardCreated={(card) => setLists((previous) => appendCard(previous, list.id, card))}
+                    onCardCreated={(card) => {
+                      setLists((previous) => appendCard(previous, list.id, card));
+                      // 新建后直接打开详情，省掉再点一次
+                      setOpenCardId(card.id);
+                    }}
                     onListRenamed={(listId, title) =>
                       setLists((previous) => replaceList(previous, listId, title))
                     }
@@ -354,11 +441,25 @@ export function KanbanBoard({
       </DndContext>
 
       <CardDetailDrawer
+        key={openCard?.id ?? "closed"}
         card={openCard}
         members={members}
+        availableLabels={boardLabels}
+        onCreateLabel={createBoardLabel}
         onClose={closeDrawer}
         onUpdated={handleCardUpdated}
         onRemoved={handleCardRemoved}
+      />
+
+      <LabelManager
+        open={labelsOpen}
+        onOpenChange={setLabelsOpen}
+        labels={boardLabels}
+        onCreate={async (name, color) => {
+          await createBoardLabel(name, color);
+        }}
+        onEdit={editBoardLabel}
+        onDelete={deleteBoardLabel}
       />
 
       <BoardSettingsDialog

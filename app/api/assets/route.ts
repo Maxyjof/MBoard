@@ -1,8 +1,10 @@
+import { withHistory } from "@/lib/history/route";
+import { ASSET_MODELS } from "@/lib/history/engine.mjs";
 import { fail, ok, serverError, withSession } from "@/lib/http";
 import { MAX_ASSET_BYTES, saveAsset, UploadError } from "@/lib/assets";
 
 // 上传资源：multipart 表单，字段 file（必填）与 kind（可选）
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   return withSession(async () => {
     let form: FormData;
     try {
@@ -26,3 +28,5 @@ export async function POST(request: Request) {
     }
   });
 }
+
+export const POST = withHistory("上传文件", handlePOST, ASSET_MODELS);

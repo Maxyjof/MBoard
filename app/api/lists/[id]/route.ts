@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { LIST_MODELS } from "@/lib/history/engine.mjs";
 // 单个列表：重命名、删除
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -6,7 +8,7 @@ import { cleanText } from "@/lib/kanban";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function PATCH(request: Request, { params }: RouteContext) {
+async function handlePATCH(request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -42,7 +44,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: RouteContext) {
+async function handleDELETE(_request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -66,3 +68,7 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     return serverError(error);
   }
 }
+
+export const PATCH = withHistory("重命名列表", handlePATCH, LIST_MODELS);
+
+export const DELETE = withHistory("删除列表", handleDELETE, LIST_MODELS);

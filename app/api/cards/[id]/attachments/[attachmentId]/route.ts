@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { CARD_MODELS } from "@/lib/history/engine.mjs";
 // 删除卡片附件关联，资源文件本身保留给其他引用
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -5,7 +7,7 @@ import { ok, notFound, serverError, unauthorized } from "@/lib/http";
 
 type RouteContext = { params: Promise<{ id: string; attachmentId: string }> };
 
-export async function DELETE(_request: Request, { params }: RouteContext) {
+async function handleDELETE(_request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -28,3 +30,5 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     return serverError(error);
   }
 }
+
+export const DELETE = withHistory("删除附件", handleDELETE, CARD_MODELS);

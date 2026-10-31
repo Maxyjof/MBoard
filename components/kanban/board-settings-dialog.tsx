@@ -153,7 +153,7 @@ export function BoardSettingsDialog({
           <div className="rounded-xl border border-danger/30 bg-danger/5 p-3">
             <p className="text-[12.5px] font-medium text-ink">删除看板</p>
             <p className="mt-0.5 text-[11.5px] leading-5 text-muted">
-              列表、卡片与附件会一并删除，且无法恢复。
+              列表、卡片与附件会一并删除，可以在「操作记录」里撤销这次删除。
             </p>
             <Button
               type="button"
@@ -173,7 +173,7 @@ export function BoardSettingsDialog({
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={`删除看板「${board.title}」`}
-        description="看板下的所有列表与卡片都会被删除，此操作不可撤销。"
+        description="看板下的所有列表与卡片都会被删除，可以在「操作记录」里撤销这次删除。"
         confirmText="确认删除"
         danger
         loading={deleting}

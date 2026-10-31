@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { CARD_MODELS } from "@/lib/history/engine.mjs";
 // 给卡片添加附件：先由 /api/assets 上传，再把 assetId 关联到卡片
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -6,7 +8,7 @@ import { toAttachmentDTO } from "@/lib/kanban";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function POST(request: Request, { params }: RouteContext) {
+async function handlePOST(request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -54,3 +56,5 @@ export async function POST(request: Request, { params }: RouteContext) {
     return serverError(error);
   }
 }
+
+export const POST = withHistory("添加附件", handlePOST, CARD_MODELS);

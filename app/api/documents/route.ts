@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { DOCUMENT_MODELS } from "@/lib/history/engine.mjs";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, readJson, serverError, withSession } from "@/lib/http";
@@ -30,7 +32,7 @@ export async function GET(request: Request) {
 }
 
 // 新建文档
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   return withSession(async () => {
     const parsed = await readJson(request, parseDocumentCreate);
     if ("error" in parsed) return parsed.error;
@@ -53,3 +55,5 @@ export async function POST(request: Request) {
     }
   });
 }
+
+export const POST = withHistory("新建文档", handlePOST, DOCUMENT_MODELS);

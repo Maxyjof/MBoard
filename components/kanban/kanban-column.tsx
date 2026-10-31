@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dropdown, MenuItem } from "@/components/ui/dropdown";
-import { Spinner } from "@/components/ui/spinner";
 import { CardItem } from "@/components/kanban/card-item";
 import { createCard, deleteList, errorMessage, updateList } from "@/components/kanban/kanban-api";
 import { cn } from "@/lib/utils";
@@ -41,8 +40,6 @@ export function KanbanColumn({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const [adding, setAdding] = useState(false);
-  const [cardTitle, setCardTitle] = useState("");
   const [creating, setCreating] = useState(false);
   const cancelEditRef = useRef(false);
 
@@ -111,14 +108,13 @@ export function KanbanColumn({
   }
 
   async function handleCreateCard() {
-    const title = cardTitle.trim();
-    if (!title || creating) return;
+    if (creating) return;
+    const title = "新卡片";
 
     setCreating(true);
     try {
       const card = await createCard(list.id, title);
       onCardCreated(card);
-      setCardTitle("");
     } catch (error) {
       toast.error(errorMessage(error));
     } finally {
@@ -238,65 +234,9 @@ export function KanbanColumn({
         </div>
 
         <div className="shrink-0 p-2 pt-0">
-          {adding ? (
-            <div className="space-y-2 rounded-xl border border-line bg-surface p-2 shadow-card">
-              <textarea
-                autoFocus
-                value={cardTitle}
-                disabled={creating}
-                onChange={(event) => setCardTitle(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void handleCreateCard();
-                  }
-                  if (event.key === "Escape") {
-                    setAdding(false);
-                    setCardTitle("");
-                  }
-                }}
-                placeholder="输入卡片标题，回车创建"
-                maxLength={120}
-                rows={2}
-                className="w-full resize-none rounded-lg border border-line bg-surface px-2 py-1.5 text-[12.5px] leading-5 text-ink outline-none placeholder:text-faint focus:border-brand/60"
-              />
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="primary"
-                  loading={creating}
-                  disabled={!cardTitle.trim()}
-                  onClick={() => void handleCreateCard()}
-                >
-                  添加卡片
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setAdding(false);
-                    setCardTitle("");
-                  }}
-                >
-                  取消
-                </Button>
-                {creating ? <Spinner className="ml-auto h-3.5 w-3.5" /> : null}
-              </div>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-muted"
-              onClick={() => setAdding(true)}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              添加卡片
-            </Button>
-          )}
+          <Button type="button" variant="ghost" size="sm" className="w-full justify-start text-muted" disabled={creating || disabled} onClick={() => void handleCreateCard()}>
+            <Plus className="h-3.5 w-3.5" />添加卡片
+          </Button>
         </div>
       </section>
 

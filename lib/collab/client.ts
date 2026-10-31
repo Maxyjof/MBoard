@@ -162,6 +162,17 @@ export class CollabConnection {
       return;
     }
 
+    if (messageType === 2) {
+      const reply = JSON.parse(decoding.readVarString(decoder));
+      const pending = this.historyRequests.get(reply.requestId);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      this.historyRequests.delete(reply.requestId);
+      if (reply.ok) pending.resolve();
+      else pending.reject(new Error(reply.error || "操作失败"));
+      return;
+    }
+
     if (messageType === 1) {
       awarenessProtocol.applyAwarenessUpdate(
         this.awareness,
@@ -169,6 +180,37 @@ export class CollabConnection {
         this
       );
     }
+  }
+
+  private historyRequests = new Map<
+    string,
+    { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
+  >();
+
+  // 局域网 http 访问时 crypto.randomUUID 可能不存在，这里做降级
+  private newRequestId(): string {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  changeHistory(action: "undo" | "redo"): Promise<void> {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error("请连接到协作服务后重试"));
+    }
+    const requestId = this.newRequestId();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.historyRequests.delete(requestId);
+        reject(new Error("等待响应超时，请检查画板状态"));
+      }, 30000);
+      this.historyRequests.set(requestId, { resolve, reject, timer });
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint(encoder, 2);
+      encoding.writeVarString(encoder, JSON.stringify({ requestId, action }));
+      this.send(encoding.toUint8Array(encoder));
+    });
   }
 
   private scheduleReconnect() {
@@ -184,6 +226,13 @@ export class CollabConnection {
 
   destroy() {
     this.destroyed = true;
+
+    // 断线时让挂起的撤销请求立刻失败，避免按钮长时间卡在忙碌状态
+    for (const pending of this.historyRequests.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error("连接已断开"));
+    }
+    this.historyRequests.clear();
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

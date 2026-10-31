@@ -1,3 +1,6 @@
+import { LABEL_PRESETS } from "@/lib/kanban";
+import { withHistory } from "@/lib/history/route";
+import { BOARD_LABEL_MODELS } from "@/lib/history/engine.mjs";
 // 看板集合：列表查询与新建
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -33,7 +36,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -54,10 +57,20 @@ export async function POST(request: Request) {
   try {
     const maxSort = await prisma.board.aggregate({ _max: { sort: true } });
     const board = await prisma.board.create({
-      data: { title, description, accent, sort: (maxSort._max.sort ?? -1) + 1 },
+      data: {
+        title,
+        description,
+        accent,
+        sort: (maxSort._max.sort ?? -1) + 1,
+        // 新看板直接带上预设标签，避免首次打开时再补
+        labelsInitialized: true,
+        labels: { create: LABEL_PRESETS },
+      },
     });
     return ok({ board: toBoardSummary(board, 0, 0) }, { status: 201 });
   } catch (error) {
     return serverError(error);
   }
 }
+
+export const POST = withHistory("新建看板", handlePOST, BOARD_LABEL_MODELS);

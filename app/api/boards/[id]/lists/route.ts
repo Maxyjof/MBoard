@@ -1,3 +1,5 @@
+import { withHistory } from "@/lib/history/route";
+import { BOARD_LIST_MODELS } from "@/lib/history/engine.mjs";
 // 在看板下新建列表
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -6,7 +8,7 @@ import { cleanText, toListDTO } from "@/lib/kanban";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function POST(request: Request, { params }: RouteContext) {
+async function handlePOST(request: Request, { params }: RouteContext) {
   const session = await getSession();
   if (!session) return unauthorized();
 
@@ -41,3 +43,5 @@ export async function POST(request: Request, { params }: RouteContext) {
     return serverError(error);
   }
 }
+
+export const POST = withHistory("新建列表", handlePOST, BOARD_LIST_MODELS);

@@ -1,7 +1,7 @@
 "use client";
 
 // 卡片详情居中大面板：标题、标签、截止日期、Markdown 描述、附件、归档与删除
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Archive,
@@ -34,6 +34,8 @@ import type { CardDTO, CardLabel, MemberDTO } from "@/lib/types";
 type CardDetailDrawerProps = {
   card: CardDTO | null;
   members: MemberDTO[];
+  availableLabels: CardLabel[];
+  onCreateLabel: (name: string, color: string) => Promise<CardLabel>;
   onClose: () => void;
   onUpdated: (card: CardDTO) => void;
   onRemoved: (cardId: string) => void;
@@ -51,17 +53,20 @@ function toDateInput(iso: string | null): string {
 export function CardDetailDrawer({
   card,
   members,
+  availableLabels,
+  onCreateLabel,
   onClose,
   onUpdated,
   onRemoved,
 }: CardDetailDrawerProps) {
   const [mounted, setMounted] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [tab, setTab] = useState<"edit" | "preview">("preview");
+  const [title, setTitle] = useState(card?.title ?? "");
+  const [description, setDescription] = useState(card?.descriptionMd ?? "");
+  const [tab, setTab] = useState<"edit" | "preview">(card?.descriptionMd.trim() ? "preview" : "edit");
   const [pendingField, setPendingField] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -76,11 +81,37 @@ export function CardDetailDrawer({
     setConfirmDelete(false);
   }, [card?.id]);
 
+  // 关闭前把未保存的正文落库，避免切换卡片时丢草稿
+  const draftRef = useRef({ description, dirty: description !== (card?.descriptionMd ?? "") });
+  draftRef.current = { description, dirty: description !== (card?.descriptionMd ?? "") };
+  const closeRef = useRef<() => void>(() => undefined);
+
+  async function closeWithSave() {
+    if (!card || closing) return;
+    if (draftRef.current.dirty) {
+      setClosing(true);
+      setPendingField("description");
+      try {
+        const updated = await updateCard(card.id, { descriptionMd: draftRef.current.description });
+        onUpdated(updated);
+      } catch (error) {
+        toast.error(errorMessage(error));
+        setPendingField(null);
+        setClosing(false);
+        return;
+      }
+      setPendingField(null);
+      setClosing(false);
+    }
+    onClose();
+  }
+  closeRef.current = () => void closeWithSave();
+
   // Esc 关闭并锁定背景滚动
   useEffect(() => {
     if (!card) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") closeRef.current();
     };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -89,7 +120,7 @@ export function CardDetailDrawer({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [card, onClose]);
+  }, [card]);
 
   if (!mounted || !card) return null;
 
@@ -197,7 +228,7 @@ export function CardDetailDrawer({
     <div className="fixed inset-0 z-[110]">
       <div
         className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px] animate-fade-in"
-        onClick={onClose}
+        onClick={() => void closeWithSave()}
       />
 
       <div
@@ -208,7 +239,7 @@ export function CardDetailDrawer({
       >
         <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
           <span className="text-[12.5px] font-medium text-muted">卡片详情</span>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
+          <button type="button" className="icon-btn" onClick={() => void closeWithSave()} aria-label="关闭">
             <X className="h-4 w-4" />
           </button>
         </header>
@@ -234,6 +265,8 @@ export function CardDetailDrawer({
             <h3 className="mb-2 text-[12.5px] font-medium text-muted">标签</h3>
             <LabelPicker
               labels={card.labels}
+              available={availableLabels}
+              onCreate={onCreateLabel}
               onChange={handleLabels}
               disabled={busy}
             />
@@ -396,7 +429,7 @@ export function CardDetailDrawer({
             <Trash2 className="h-3.5 w-3.5" />
             删除
           </Button>
-          <Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={onClose}>
+          <Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void closeWithSave()}>
             关闭
           </Button>
         </footer>
@@ -406,7 +439,7 @@ export function CardDetailDrawer({
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="删除卡片"
-        description="卡片的内容与附件关联会一并删除，此操作不可撤销。"
+        description="卡片的内容与附件关联会一并删除，可以在「操作记录」里撤销这次删除。"
         confirmText="删除卡片"
         danger
         loading={deleting}

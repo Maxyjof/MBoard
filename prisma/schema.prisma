@@ -21,8 +21,20 @@ model Board {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   lists       BoardList[]
+  labels      BoardLabel[]
+  labelsInitialized Boolean @default(false)
 
   @@index([sort])
+}
+
+/// 每个看板独立维护标签
+model BoardLabel {
+  id String @id @default(cuid())
+  boardId String
+  name String
+  color String
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  @@unique([boardId, name])
 }
 
 /// 看板列表（Trello 中的 List）
@@ -85,8 +97,20 @@ model Canvas {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   thumbnailAsset   Asset?   @relation("CanvasThumbnail", fields: [thumbnailAssetId], references: [id], onDelete: SetNull)
+  history          CanvasHistory[]
 
   @@index([updatedAt])
+}
+
+/// 画板变更快照，供只读预览使用
+model CanvasHistory {
+  id String @id @default(cuid())
+  canvasId String
+  actor String
+  sceneJson String
+  createdAt DateTime @default(now())
+  canvas Canvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  @@index([canvasId, createdAt])
 }
 
 /// 上传的静态资源：图片、视频、Markdown 附件、画板缩略图
@@ -121,4 +145,28 @@ model UserProfile {
   color        String   @default("#6353f5")
   passwordHash String?
   updatedAt    DateTime @updatedAt
+}
+model WorkOperation {
+  id String @id @default(cuid())
+  actor String
+  title String
+  changes String
+  undone Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([actor, createdAt])
+}
+model WorkHead {
+  id String @id
+  actor String
+}
+model CanvasOperation {
+  id String @id @default(cuid())
+  canvasId String
+  actor String
+  changes String
+  undone Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([canvasId, actor, createdAt])
 }

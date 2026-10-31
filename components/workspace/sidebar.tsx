@@ -25,6 +25,7 @@ import { useTheme } from "@/lib/use-theme";
 import { cn } from "@/lib/utils";
 import type { AppUser, BoardSummary } from "@/lib/types";
 import { CreateBoardDialog } from "@/components/workspace/create-board-dialog";
+import { WorkHistory } from "@/components/workspace/work-history";
 
 type SidebarProps = {
   user: AppUser;
@@ -197,6 +198,10 @@ export function Sidebar({
         ) : (
           <div className="flex-1" />
         )}
+
+        <div className={cn("border-t border-line p-2", collapsed && !mobile && "flex justify-center")}>
+          <WorkHistory collapsed={collapsed && !mobile} />
+        </div>
 
         <div className={cn("border-t border-line p-2", collapsed && !mobile && "flex justify-center")}>
           <UserMenu
