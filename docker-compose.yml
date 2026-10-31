@@ -1,0 +1,39 @@
+services:
+  mboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mboard:latest
+    container_name: mboard
+    restart: unless-stopped
+    ports:
+      # 默认只绑定本机回环，由宿主机 Nginx 反代到 http://127.0.0.1:3000/mboard
+      # 如需公网直连，在 .env 里设置 MBOARD_BIND=0.0.0.0
+      - "${MBOARD_BIND:-127.0.0.1}:${MBOARD_PORT:-3000}:3000"
+    env_file:
+      # 首次部署请先执行 cp .env.example .env 并填入自己的值
+      - .env
+    environment:
+      NODE_ENV: production
+      TZ: "${TZ:-Asia/Shanghai}"
+      DATABASE_URL: "file:../data/mboard.db"
+      UPLOAD_DIR: "/app/data/uploads"
+      ACCOUNTS_FILE: "/app/config/accounts.yml"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+    volumes:
+      # 数据库与上传文件都在 data/ 下，备份这个目录即可
+      - ./data:/app/data
+      # 账号配置只读挂载，改完重启容器生效
+      - ./config:/app/config:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/mboard/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
