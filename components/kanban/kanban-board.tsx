@@ -145,6 +145,23 @@ export function KanbanBoard({
     syncCardLabels((labels) => labels.filter((label) => label.name !== previousLabel.name));
   }
 
+  // 拖拽排序后按后端返回的顺序重排本地标签表
+  async function reorderBoardLabels(ids: string[]) {
+    const response = await fetch(`/api/boards/${initialBoard.id}/labels/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "标签排序失败");
+    setBoardLabels((previous) => {
+      const byId = new Map(previous.map((label) => [label.id, label]));
+      return ids
+        .map((id) => byId.get(id))
+        .filter((label): label is BoardLabel => label !== undefined);
+    });
+  }
+
 
   const [addListOpen, setAddListOpen] = useState(false);
   const [listTitle, setListTitle] = useState("");
@@ -460,6 +477,7 @@ export function KanbanBoard({
         }}
         onEdit={editBoardLabel}
         onDelete={deleteBoardLabel}
+        onReorder={reorderBoardLabels}
       />
 
       <BoardSettingsDialog

@@ -64,7 +64,7 @@ async function handlePOST(request: Request) {
         sort: (maxSort._max.sort ?? -1) + 1,
         // 新看板直接带上预设标签，避免首次打开时再补
         labelsInitialized: true,
-        labels: { create: LABEL_PRESETS },
+        labels: { create: LABEL_PRESETS.map((label, index) => ({ ...label, sort: index })) },
       },
     });
     return ok({ board: toBoardSummary(board, 0, 0) }, { status: 201 });

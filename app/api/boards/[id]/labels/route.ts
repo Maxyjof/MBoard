@@ -26,17 +26,22 @@ async function ensureBoardLabels(boardId: string) {
           for (const label of parseLabels(card.labels)) labels.set(label.name, label);
         }
       }
+      let sort = 0;
       for (const label of labels.values()) {
         await tx.boardLabel.upsert({
           where: { boardId_name: { boardId, name: label.name } },
-          create: { boardId, ...label },
+          create: { boardId, ...label, sort },
           update: {},
         });
+        sort += 1;
       }
       await tx.board.update({ where: { id: boardId }, data: { labelsInitialized: true } });
     }
 
-    return tx.boardLabel.findMany({ where: { boardId }, orderBy: { name: "asc" } });
+    return tx.boardLabel.findMany({
+      where: { boardId },
+      orderBy: [{ sort: "asc" }, { name: "asc" }],
+    });
   });
 }
 
@@ -64,7 +69,10 @@ async function handlePOST(request: Request, { params }: Context) {
       return fail("标签名称已存在", 409);
     }
 
-    const label = await prisma.boardLabel.create({ data: { boardId, name, color: body.color } });
+    const maxSort = await prisma.boardLabel.aggregate({ where: { boardId }, _max: { sort: true } });
+    const label = await prisma.boardLabel.create({
+      data: { boardId, name, color: body.color, sort: (maxSort._max.sort ?? -1) + 1 },
+    });
     return ok({ label });
   } catch (error) {
     return serverError(error);

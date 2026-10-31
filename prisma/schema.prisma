@@ -33,6 +33,8 @@ model BoardLabel {
   boardId String
   name String
   color String
+  /// 展示顺序，由标签管理里的拖拽决定
+  sort Int @default(0)
   board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
   @@unique([boardId, name])
 }
