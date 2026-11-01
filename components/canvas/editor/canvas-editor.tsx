@@ -219,7 +219,10 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       tableSaveTimersRef.current.set(id, timer);
     }
   }, []);
+  const knownTableIdsRef = useRef<Set<string>>(new Set());
+  const tableDeleteTimersRef = useRef<Map<string, number>>(new Map());
   const pressedElementIdRef = useRef<string | null>(null);
+  const lastNodeClickRef = useRef<{ id: string; x: number; y: number; time: number } | null>(null);
   const canvasPressRef = useRef<{
     hit: {
       kind: "doc" | "video" | "file" | "composite";
@@ -500,6 +503,25 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         updateSelection(null);
       }
 
+      const tableIds = new Set<string>(elements.filter((element: any) => !element.isDeleted && element.customData?.mbTableId).map((element: any) => element.customData.mbTableId));
+      for (const id of tableIds) {
+        const timer = tableDeleteTimersRef.current.get(id);
+        if (timer) { window.clearTimeout(timer); tableDeleteTimersRef.current.delete(id); }
+      }
+      for (const id of knownTableIdsRef.current) {
+        if (tableIds.has(id) || tableDeleteTimersRef.current.has(id)) continue;
+        const timer = window.setTimeout(async () => {
+          tableDeleteTimersRef.current.delete(id);
+          if (apiRef.current?.getSceneElements().some((item: any) => item.customData?.mbTableId === id)) return;
+          try {
+            const response = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+            if (!response.ok && response.status !== 404) throw new Error();
+            window.dispatchEvent(new Event("mboard:table-deleted"));
+          } catch { toast.error("表格文档删除失败，请在文档库中重试"); }
+        }, 2500);
+        tableDeleteTimersRef.current.set(id, timer);
+      }
+      knownTableIdsRef.current = tableIds;
       scheduleTableSave(elements);
 
       markDirty();
@@ -568,21 +590,30 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         // 拖拽结束后同步画框 children，保证子元素随画框移动
         syncFrameChildren(api);
 
-        // 自己判断单击：位移小且时间短；拖拽/框选/缩放不会触发
+        // Only open a node after two clicks on the same element, without dragging.
         const press = canvasPressRef.current;
         canvasPressRef.current = null;
         const pressedId = pressedElementIdRef.current;
         pressedElementIdRef.current = null;
-        if (event.button !== 0) return;
+        if (event.button !== 0) { lastNodeClickRef.current = null; return; }
 
         const distance = press
           ? Math.hypot(event.clientX - press.x, event.clientY - press.y)
           : Number.POSITIVE_INFINITY;
-        if (press?.hit && distance < 5 && Date.now() - press.time < 600) {
-          setPanelOpen(true);
-          setOpenRequest({ ...press.hit, seq: Date.now() });
+        if (press?.hit && pressedId && distance < 5 && Date.now() - press.time < 600) {
+          const previous = lastNodeClickRef.current;
+          const now = Date.now();
+          if (previous && previous.id === pressedId && now - previous.time < 500 &&
+              Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 8) {
+            lastNodeClickRef.current = null;
+            setPanelOpen(true);
+            setOpenRequest({ ...press.hit, seq: now });
+          } else {
+            lastNodeClickRef.current = { id: pressedId, x: event.clientX, y: event.clientY, time: now };
+          }
           return;
         }
+        lastNodeClickRef.current = null;
 
         // 拖拽文字/图片到组合卡片上时，直接吸收成卡片成员
         if (distance >= 5 && pressedId) {
@@ -802,6 +833,9 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       if (collabSyncTimerRef.current) window.clearTimeout(collabSyncTimerRef.current);
       for (const timer of tableSaveTimersRef.current.values()) window.clearTimeout(timer);
       tableSaveTimersRef.current.clear();
+      for (const timer of tableDeleteTimersRef.current.values()) window.clearTimeout(timer);
+      tableDeleteTimersRef.current.clear();
+      knownTableIdsRef.current.clear();
     };
   }, []);
 

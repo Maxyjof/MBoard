@@ -167,6 +167,12 @@ export function AssetPanel({
     void loadDocs();
   }, [loadDocs]);
 
+  useEffect(() => {
+    const refresh = () => { void loadDocs(query.trim()); };
+    window.addEventListener("mboard:table-deleted", refresh);
+    return () => window.removeEventListener("mboard:table-deleted", refresh);
+  }, [loadDocs, query]);
+
   // 搜索防抖
   useEffect(() => {
     const timer = setTimeout(() => void loadDocs(query.trim()), 260);
@@ -330,8 +336,6 @@ export function AssetPanel({
         toast.error(data.error || "创建表格失败");
         return;
       }
-      withApi((api) => insertDocCard(api, data.document!));
-      toast.success("表格已插入，可直接在画布单元格中编辑");
       setTab("docs");
       await loadDocs(query.trim());
       setActiveDoc(data.document);
@@ -724,9 +728,9 @@ export function AssetPanel({
                       </button>
                       <button
                         type="button"
-                        onClick={() => void insertExistingDoc(doc)}
+                        onClick={() => void openDoc(doc.id)}
                         className="icon-btn h-7 w-7 opacity-0 transition group-hover:opacity-100"
-                        aria-label="插入到画布"
+                        aria-label="编辑文档"
                       >
                         <SquarePen className="h-3.5 w-3.5" />
                       </button>
@@ -798,7 +802,7 @@ export function AssetPanel({
         }}
         onInsert={(doc) => {
           withApi((api) => insertDocCard(api, doc));
-          toast.success("文档卡片已插入画布");
+          toast.success(doc.kind === "table" ? "表格已插入画布" : "文档卡片已插入画布");
         }}
       />
 

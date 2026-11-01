@@ -9,9 +9,11 @@ type MarkdownLiveEditorProps = {
   onChange: (value: string) => void;
   className?: string;
   disabled?: boolean;
+  tableWidths?: Record<string, number>;
+  onTableWidthsChange?: (widths: Record<string, number>) => void;
 };
 
-export function MarkdownLiveEditor({ initialValue, onChange, className, disabled = false }: MarkdownLiveEditorProps) {
+export function MarkdownLiveEditor({ initialValue, onChange, className, disabled = false, tableWidths, onTableWidthsChange }: MarkdownLiveEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Vditor | null>(null);
   const onChangeRef = useRef(onChange);
@@ -78,6 +80,61 @@ export function MarkdownLiveEditor({ initialValue, onChange, className, disabled
     // 父组件通过 key 在切换文档时重建编辑器，避免输入中重建导致光标跳动。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const widthsRef = useRef(tableWidths ?? {});
+  const widthsChangeRef = useRef(onTableWidthsChange);
+  widthsChangeRef.current = onTableWidthsChange;
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || !onTableWidthsChange) return;
+    const scope = `mb-${Math.random().toString(36).slice(2)}`;
+    root.dataset.resizeScope = scope;
+    const style = document.createElement("style");
+    document.head.appendChild(style);
+    const refresh = () => {
+      root.querySelectorAll<HTMLTableElement>(".vditor-wysiwyg table").forEach((table, index) => {
+        if (table.dataset.mbTable !== String(index)) table.dataset.mbTable = String(index);
+      });
+      const rules = Object.entries(widthsRef.current).map(([key, width]) => {
+        if (!/^\d+:\d+$/.test(key) || typeof width !== "number" || !Number.isFinite(width)) return "";
+        const [table, column] = key.split(":").map(Number);
+        const px = Math.min(2000, Math.max(48, width));
+        return `[data-resize-scope="${scope}"] table[data-mb-table="${table}"] tr > :nth-child(${column + 1}) { box-sizing: border-box; min-width: ${px}px; max-width: ${px}px; width: ${px}px; }`;
+      }).join("\n");
+      if (style.textContent !== rules) style.textContent = rules;
+    };
+    const observer = new MutationObserver(refresh);
+    observer.observe(root, { childList: true, subtree: true });
+    let drag: { x: number; width: number; key: string; pointer: number } | null = null;
+    const down = (event: PointerEvent) => {
+      if (disabledRef.current || event.button !== 0) return;
+      const cell = (event.target as HTMLElement).closest<HTMLTableCellElement>(".vditor-wysiwyg th, .vditor-wysiwyg td");
+      if (!cell || Math.abs(event.clientX - cell.getBoundingClientRect().right) > 7) return;
+      const table = cell.closest("table");
+      if (!table) return;
+      refresh();
+      drag = { x: event.clientX, width: cell.getBoundingClientRect().width, key: `${table.dataset.mbTable}:${cell.cellIndex}`, pointer: event.pointerId };
+      event.preventDefault(); event.stopPropagation();
+    };
+    const move = (event: PointerEvent) => {
+      if (!drag || event.pointerId !== drag.pointer) return;
+      widthsRef.current = { ...widthsRef.current, [drag.key]: Math.min(2000, Math.max(48, Math.round(drag.width + event.clientX - drag.x))) };
+      refresh();
+      event.preventDefault();
+    };
+    const up = (event: PointerEvent) => {
+      if (!drag || event.pointerId !== drag.pointer) return;
+      drag = null;
+      widthsChangeRef.current?.(widthsRef.current);
+    };
+    root.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    refresh();
+    return () => { observer.disconnect(); style.remove(); delete root.dataset.resizeScope; root.removeEventListener("pointerdown", down, true); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+  }, [onTableWidthsChange !== undefined]);
 
   useEffect(() => {
     const editor = editorRef.current;
