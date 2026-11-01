@@ -67,6 +67,13 @@ import { blobToDataURL, uploadAsset } from "./scene-assets";
 type DocListItem = Omit<DocumentDTO, "contentMd">;
 
 export type CanvasSelection = {
+  elementId?: string;
+  elementType?: string;
+  width?: number;
+  height?: number;
+  imageFileId?: string;
+  imageAssetId?: string;
+  elementLabel?: string;
   docId?: string;
   docTitle?: string;
   tableDocId?: string;
@@ -250,6 +257,28 @@ export function AssetPanel({
       cancelled = true;
     };
   }, [selection?.docId]);
+
+  async function downloadImage() {
+    if (!selection?.imageFileId) return;
+    try {
+      const dataURL = apiRef.current?.getFiles()[selection.imageFileId]?.dataURL;
+      const source = selection.imageAssetId ? `/api/assets/${selection.imageAssetId}` : dataURL;
+      if (!source) throw new Error("图片文件尚未加载");
+      const response = await fetch(source);
+      if (!response.ok) throw new Error("图片文件不可用");
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      let filename = "";
+      try { filename = encodedName ? decodeURIComponent(encodedName) : ""; } catch { /* Use a generated name. */ }
+      const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "image/avif": "avif" };
+      if (!filename) filename = `图片.${extensions[blob.type] || "png"}`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = filename; anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch { toast.error("图片下载失败，请稍后重试"); }
+  }
 
   async function handleImageFile(file: File) {
     setBusy("image");
@@ -467,7 +496,21 @@ export function AssetPanel({
         </div>
       </div>
 
-      {selection?.tableDocId ? (
+      {selection?.imageFileId ? (
+        <div className="mx-3 mt-3 overflow-hidden rounded-xl border border-brand/25 bg-brand/5">
+          <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+            <div><p className="text-[11px] font-medium text-brand">已选中图片</p>
+              <p className="mt-1 text-[11px] text-muted">画布尺寸 {Math.round(selection.width || 0)} × {Math.round(selection.height || 0)}</p></div>
+            <Button size="sm" variant="subtle" onClick={() => void downloadImage()}><Download className="h-3.5 w-3.5" />下载图片</Button>
+          </div>
+          {(selection.imageAssetId || apiRef.current?.getFiles()[selection.imageFileId]?.dataURL) && (
+            <div className="border-t border-brand/15 bg-surface p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="mx-auto max-h-44 max-w-full object-contain" alt="选中的图片" src={selection.imageAssetId ? `/mboard/api/assets/${selection.imageAssetId}` : apiRef.current?.getFiles()[selection.imageFileId]?.dataURL} />
+            </div>
+          )}
+        </div>
+      ) : selection?.tableDocId ? (
         <div className="mx-3 mt-3 overflow-hidden rounded-xl border border-brand/25 bg-brand/5">
           <div className="flex items-center justify-between gap-2 px-3 py-2.5">
             <div className="min-w-0">
@@ -553,6 +596,11 @@ export function AssetPanel({
               播放
             </Button>
           </div>
+        </div>
+      ) : selection?.elementId ? (
+        <div className="mx-3 mt-3 rounded-xl border border-brand/25 bg-brand/5 p-3">
+          <p className="text-[11px] font-medium text-brand">已选中{selection.elementLabel || ({ text: "文本", rectangle: "矩形", ellipse: "圆形", diamond: "菱形", arrow: "箭头", line: "线条", frame: "画框", freedraw: "绘图", image: "图片" } as Record<string, string>)[selection.elementType || ""] || "画布元素"}</p>
+          <p className="mt-1 text-[11px] text-muted">画布尺寸 {Math.round(selection.width || 0)} × {Math.round(selection.height || 0)}</p>
         </div>
       ) : null}
 

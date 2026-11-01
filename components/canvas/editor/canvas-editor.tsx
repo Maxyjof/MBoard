@@ -242,11 +242,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
 
   // 选中元素信息变化时才更新面板，避免 onChange 高频重渲染
   const updateSelection = useCallback((next: CanvasSelection | null) => {
-    const key = next
-      ? `${next.docId ?? ""}|${next.videoAssetId ?? ""}|${next.fileAssetId ?? ""}|${
-          next.docTitle ?? ""
-        }|${next.videoName ?? ""}|${next.fileName ?? ""}`
-      : "";
+    const key = next ? JSON.stringify(next) : "";
     if (selectionKeyRef.current === key) return;
     selectionKeyRef.current = key;
     setSelection(next);
@@ -477,7 +473,7 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       if (selectedIds.length === 1) {
         const element = elements.find((item) => item.id === selectedIds[0]) as any;
         if (element?.customData?.mbComposite) {
-          updateSelection(null);
+          updateSelection({ elementId: element.id, elementType: element.type, elementLabel: "组合卡片", width: element.width, height: element.height });
         } else if (element?.customData?.mbTableId) {
           updateSelection({
             tableDocId: element.customData.mbTableId,
@@ -496,6 +492,10 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
             fileName: element.customData.mbFileName,
             fileMime: element.customData.mbFileMime,
           });
+        } else if (element?.type === "image" && element.fileId) {
+          updateSelection({ elementId: element.id, elementType: element.type, width: element.width, height: element.height, imageFileId: element.fileId, imageAssetId: element.customData?.assetId });
+        } else if (element) {
+          updateSelection({ elementId: element.id, elementType: element.type, width: element.width, height: element.height });
         } else {
           updateSelection(null);
         }
