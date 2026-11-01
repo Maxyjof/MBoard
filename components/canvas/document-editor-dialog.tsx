@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { FilePlus2, Download } from "lucide-react";
+import { FilePlus2, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -16,6 +16,8 @@ type DocumentEditorDialogProps = {
   onOpenChange: (open: boolean) => void;
   onSaved: (document: DocumentDTO) => void;
   onInsert: (document: DocumentDTO) => void;
+  // inline 为真时以右侧面板内联方式渲染，不覆盖画布
+  inline?: boolean;
 };
 
 type Draft = {
@@ -41,6 +43,7 @@ export function DocumentEditorDialog({
   onOpenChange,
   onSaved,
   onInsert,
+  inline = false,
 }: DocumentEditorDialogProps) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -169,6 +172,123 @@ export function DocumentEditorDialog({
     window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
+  // 弹窗与内联面板共用同一套底部操作，避免两处逻辑分叉
+  const actions = (
+    <>
+      <Button variant="ghost" onClick={downloadDraft} disabled={!draft || inserting}>
+        <Download className="h-3.5 w-3.5" />
+        下载
+      </Button>
+      <span className="mr-auto text-xs text-muted" role="status">
+        {saveError ? `保存失败：${saveError}` : saving ? "正在保存…" : "自动保存"}
+      </span>
+      <Button variant="ghost" onClick={() => void close()} disabled={inserting}>
+        关闭
+      </Button>
+      <Button variant="secondary" onClick={() => void saveAndInsert()} loading={inserting}>
+        <FilePlus2 className="h-3.5 w-3.5" />
+        插入画布
+      </Button>
+    </>
+  );
+
+  const body = draft ? (
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="shrink-0 px-1">
+        {editingTitle ? (
+          <Input
+            autoFocus
+            value={draft.title}
+            onChange={(event) =>
+              setDraft((previous) =>
+                previous ? { ...previous, title: event.target.value } : previous
+              )
+            }
+            onBlur={() => setEditingTitle(false)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                setEditingTitle(false);
+              }
+              if (event.key === "Escape") {
+                setDraft((previous) =>
+                  previous ? { ...previous, title: document?.title ?? previous.title } : previous
+                );
+                setEditingTitle(false);
+              }
+            }}
+            placeholder="文件名"
+            maxLength={120}
+            disabled={inserting}
+          />
+        ) : (
+          <button
+            type="button"
+            data-skip-autofocus
+            className="max-w-full truncate rounded-lg px-1 text-left text-[15px] font-medium text-ink hover:bg-surface-2"
+            onDoubleClick={() => setEditingTitle(true)}
+            title="双击修改文件名"
+          >
+            {draft.title || "未命名文档"}
+          </button>
+        )}
+      </div>
+
+      {tableMode ? (
+        <TableEditor
+          key={`${draft.id}-${open}`}
+          value={draft.content}
+          onChange={(content) =>
+            setDraft((previous) => (previous ? { ...previous, content } : previous))
+          }
+          disabled={inserting}
+          className="min-h-0 flex-1 overflow-y-auto pr-1"
+        />
+      ) : (
+        <MarkdownLiveEditor
+          key={`${draft.id}-${open}`}
+          initialValue={draft.content}
+          tableWidths={draft.tableWidths}
+          onTableWidthsChange={(tableWidths) => setDraft((previous) => previous ? { ...previous, tableWidths } : previous)}
+          onChange={(content) =>
+            setDraft((previous) => (previous ? { ...previous, content } : previous))
+          }
+          className="h-full min-h-0 flex-1"
+          disabled={inserting}
+        />
+      )}
+    </div>
+  ) : (
+    <div className="flex h-40 items-center justify-center text-[12px] text-muted">
+      正在加载文档内容…
+    </div>
+  );
+
+  // 内联模式：作为右侧面板的一部分渲染，画布始终可见
+  if (inline) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-3 py-2">
+          <span className="truncate text-[11px] font-medium uppercase tracking-wide text-brand">
+            文档编辑
+          </span>
+          <button
+            type="button"
+            onClick={() => void close()}
+            className="icon-btn h-7 w-7"
+            aria-label="关闭编辑器"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-2">{body}</div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line px-3 py-2">
+          {actions}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Modal
       open={open && Boolean(document)}
@@ -178,93 +298,9 @@ export function DocumentEditorDialog({
       bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3"
       lockViewport
       centered
-      footer={
-        <>
-          <Button variant="ghost" onClick={downloadDraft} disabled={!draft || inserting}>
-            <Download className="h-3.5 w-3.5" />
-            下载
-          </Button>
-          <span className="mr-auto text-xs text-muted" role="status">{saveError ? `保存失败：${saveError}` : saving ? "正在保存…" : "自动保存"}</span>
-          <Button variant="ghost" onClick={() => void close()} disabled={inserting}>关闭</Button>
-          <Button variant="secondary" onClick={() => void saveAndInsert()} loading={inserting}>
-            <FilePlus2 className="h-3.5 w-3.5" />
-            插入画布
-          </Button>
-
-        </>
-      }
+      footer={actions}
     >
-      {draft ? (
-        <div className="flex h-full min-h-0 flex-col gap-3">
-          <div className="shrink-0 px-1">
-            {editingTitle ? (
-              <Input
-                autoFocus
-                value={draft.title}
-                onChange={(event) =>
-                  setDraft((previous) =>
-                    previous ? { ...previous, title: event.target.value } : previous
-                  )
-                }
-                onBlur={() => setEditingTitle(false)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    setEditingTitle(false);
-                  }
-                  if (event.key === "Escape") {
-                    setDraft((previous) =>
-                      previous ? { ...previous, title: document?.title ?? previous.title } : previous
-                    );
-                    setEditingTitle(false);
-                  }
-                }}
-                placeholder="文件名"
-                maxLength={120}
-                disabled={inserting}
-              />
-            ) : (
-              <button
-                type="button"
-                data-skip-autofocus
-                className="max-w-full truncate rounded-lg px-1 text-left text-[15px] font-medium text-ink hover:bg-surface-2"
-                onDoubleClick={() => setEditingTitle(true)}
-                title="双击修改文件名"
-              >
-                {draft.title || "未命名文档"}
-              </button>
-            )}
-          </div>
-
-          {tableMode ? (
-            <TableEditor
-              key={`${draft.id}-${open}`}
-              value={draft.content}
-              onChange={(content) =>
-                setDraft((previous) => (previous ? { ...previous, content } : previous))
-              }
-              disabled={inserting}
-              className="min-h-0 flex-1 overflow-y-auto pr-1"
-            />
-          ) : (
-            <MarkdownLiveEditor
-              key={`${draft.id}-${open}`}
-              initialValue={draft.content}
-              tableWidths={draft.tableWidths}
-              onTableWidthsChange={(tableWidths) => setDraft((previous) => previous ? { ...previous, tableWidths } : previous)}
-              onChange={(content) =>
-                setDraft((previous) => (previous ? { ...previous, content } : previous))
-              }
-              className="h-full min-h-0 flex-1"
-              disabled={inserting}
-            />
-          )}
-        </div>
-      ) : (
-        <div className="flex h-40 items-center justify-center text-[12px] text-muted">
-          正在加载文档内容…
-        </div>
-      )}
+      {body}
     </Modal>
   );
 }

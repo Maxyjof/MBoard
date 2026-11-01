@@ -25,8 +25,6 @@ type CompositeCardDialogProps = {
   onOpenDocument?: (id: string) => void;
 };
 
-const DEFAULT_FIELDS = ["场景：", "人物：", "情节："];
-
 // 组合卡片编辑器：创建时也能继续编辑，旧卡片点开即可追加或删除成员
 export function CompositeCardDialog({
   open,
@@ -37,7 +35,7 @@ export function CompositeCardDialog({
   onOpenDocument,
 }: CompositeCardDialogProps) {
   const [title, setTitle] = useState("1. 新故事");
-  const [fields, setFields] = useState<string[]>([...DEFAULT_FIELDS]);
+  const [fields, setFields] = useState<string[]>([]);
   const [images, setImages] = useState<CompositeCardImage[]>([]);
   const [docIds, setDocIds] = useState<string[]>([]);
   const [docToAdd, setDocToAdd] = useState("");
@@ -47,9 +45,9 @@ export function CompositeCardDialog({
   useEffect(() => {
     if (!open) return;
     setTitle(initial?.title || "1. 新故事");
-    setFields(
-      initial?.fields?.length ? [...initial.fields] : [...DEFAULT_FIELDS]
-    );
+    // 编辑已有卡片时严格沿用已保存的字段：用户删空后保存，再次打开必须保持为空，
+    // 不能因为数组为空就回填预设文案；新建卡片同样从空列表开始。
+    setFields(initial ? [...(initial.fields ?? [])] : []);
     setImages(initial?.images ? [...initial.images] : []);
     setDocIds(
       initial?.documents?.map((doc) => doc.id) ||

@@ -66,6 +66,18 @@ export function MarkdownLiveEditor({ initialValue, onChange, className, disabled
         if (disabledRef.current) current.disabled();
       },
       input(value) {
+        // Vditor 在部分 blur、禁用切换或重建场景中会以空串回调 input。
+        // 这里用实例的真实内容做交叉校验：实例里还有内容时，忽略这次空值回调，避免已有内容被误清空。
+        if (!value) {
+          let actual = "";
+          try {
+            const current = editorRef.current as any;
+            actual = current && typeof current.getValue === "function" ? current.getValue() : "";
+          } catch {
+            actual = "";
+          }
+          if (actual && actual.trim()) return;
+        }
         onChangeRef.current(value);
       },
       });

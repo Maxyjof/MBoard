@@ -7,7 +7,6 @@ import {
   Archive,
   ArchiveRestore,
   CalendarDays,
-  Check,
   Trash2,
   Users,
   X,
@@ -60,58 +59,55 @@ export function CardDetailDrawer({
   onRemoved,
 }: CardDetailDrawerProps) {
   const [mounted, setMounted] = useState(false);
-  const [title, setTitle] = useState(card?.title ?? "");
-  const [description, setDescription] = useState(card?.descriptionMd ?? "");
-  const [tab, setTab] = useState<"edit" | "preview">(card?.descriptionMd.trim() ? "preview" : "edit");
+  const [title, setTitle] = useState("");
+  // 描述草稿与卡片 id 绑定：只有草稿属于当前卡片时才使用，避免切换卡片时串用上一张的内容
+  const [draft, setDraft] = useState<{ cardId: string; value: string } | null>(null);
+  const [tab, setTab] = useState<"edit" | "preview">("preview");
   const [pendingField, setPendingField] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [closing, setClosing] = useState(false);
+  // Markdown 描述改为自动保存：停止输入后落库，关闭抽屉前再兜底提交一次
+  // 待保存队列带上所属卡片 id，避免把内容写到错误的卡片上
+  const pendingDescriptionRef = useRef<{ cardId: string; value: string } | null>(null);
+  const autoSavingRef = useRef(false);
+
+  // 当前展示的描述：草稿属于本卡片时用草稿，否则回落到卡片已保存内容
+  const description =
+    draft && card && draft.cardId === card.id ? draft.value : (card?.descriptionMd ?? "");
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // 切换卡片时载入草稿；同一卡片的字段更新不打断输入
+  // 切换卡片时先把上一张未落库的草稿保存掉，再重置本地草稿
   useEffect(() => {
     if (!card) return;
+    void flushAutoSave();
+    setDraft(null);
     setTitle(card.title);
-    setDescription(card.descriptionMd);
     setTab(card.descriptionMd.trim() ? "preview" : "edit");
     setConfirmDelete(false);
   }, [card?.id]);
 
-  // 关闭前把未保存的正文落库，避免切换卡片时丢草稿
-  const draftRef = useRef({ description, dirty: description !== (card?.descriptionMd ?? "") });
-  draftRef.current = { description, dirty: description !== (card?.descriptionMd ?? "") };
-  const closeRef = useRef<() => void>(() => undefined);
-
-  async function closeWithSave() {
-    if (!card || closing) return;
-    if (draftRef.current.dirty) {
-      setClosing(true);
-      setPendingField("description");
-      try {
-        const updated = await updateCard(card.id, { descriptionMd: draftRef.current.description });
-        onUpdated(updated);
-      } catch (error) {
-        toast.error(errorMessage(error));
-        setPendingField(null);
-        setClosing(false);
-        return;
-      }
-      setPendingField(null);
-      setClosing(false);
+  // 描述自动保存：停止输入 900ms 后落库，无需手动点保存
+  useEffect(() => {
+    if (!card) return;
+    if (description === card.descriptionMd) {
+      pendingDescriptionRef.current = null;
+      return;
     }
-    onClose();
-  }
-  closeRef.current = () => void closeWithSave();
+    pendingDescriptionRef.current = { cardId: card.id, value: description };
+    const timer = window.setTimeout(() => {
+      void flushAutoSave();
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [description, card?.id, card?.descriptionMd]);
 
   // Esc 关闭并锁定背景滚动
   useEffect(() => {
     if (!card) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeRef.current();
+      if (event.key === "Escape") handleClose();
     };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -158,9 +154,29 @@ export function CardDetailDrawer({
     if (!ok) setTitle(card.title);
   }
 
-  async function saveDescription() {
-    if (!card || !descriptionDirty) return;
-    await patchCard({ descriptionMd: description }, "description", "描述已保存");
+  // 自动保存描述：串行执行；保存期间又有新输入，结束后再补一次
+  async function flushAutoSave() {
+    if (autoSavingRef.current) return;
+    const target = pendingDescriptionRef.current;
+    if (!target) return;
+    autoSavingRef.current = true;
+    try {
+      const updated = await updateCard(target.cardId, { descriptionMd: target.value });
+      if (pendingDescriptionRef.current === target) pendingDescriptionRef.current = null;
+      onUpdated(updated);
+    } catch (error) {
+      if (pendingDescriptionRef.current === target) pendingDescriptionRef.current = null;
+      toast.error(errorMessage(error));
+    } finally {
+      autoSavingRef.current = false;
+    }
+    if (pendingDescriptionRef.current) void flushAutoSave();
+  }
+
+  // 关闭抽屉前把尚未落库的描述提交掉，避免内容丢失
+  function handleClose() {
+    void flushAutoSave();
+    onClose();
   }
 
   function handleLabels(next: CardLabel[]) {
@@ -228,7 +244,7 @@ export function CardDetailDrawer({
     <div className="fixed inset-0 z-[110]">
       <div
         className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px] animate-fade-in"
-        onClick={() => void closeWithSave()}
+        onClick={handleClose}
       />
 
       <div
@@ -239,7 +255,7 @@ export function CardDetailDrawer({
       >
         <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
           <span className="text-[12.5px] font-medium text-muted">卡片详情</span>
-          <button type="button" className="icon-btn" onClick={() => void closeWithSave()} aria-label="关闭">
+          <button type="button" className="icon-btn" onClick={handleClose} aria-label="关闭">
             <X className="h-4 w-4" />
           </button>
         </header>
@@ -354,24 +370,23 @@ export function CardDetailDrawer({
                   预览
                 </button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={!descriptionDirty || busy}
-                loading={pendingField === "description"}
-                onClick={() => void saveDescription()}
-              >
-                {pendingField === "description" ? null : <Check className="h-3.5 w-3.5" />}
-                保存
-              </Button>
+              <span className="inline-flex items-center gap-1 text-[11px] text-faint">
+                {descriptionDirty ? (
+                  <>
+                    <Spinner className="h-3 w-3" />
+                    自动保存中
+                  </>
+                ) : (
+                  "已自动保存"
+                )}
+              </span>
             </div>
 
             {tab === "edit" ? (
               <MarkdownLiveEditor
                 key={`${card.id}-description`}
                 initialValue={description}
-                onChange={setDescription}
+                onChange={(value) => setDraft({ cardId: card.id, value })}
                 disabled={busy}
                 className="h-[420px] min-h-[320px]"
               />
@@ -380,7 +395,7 @@ export function CardDetailDrawer({
                 <MarkdownView content={description} />
               </div>
             )}
-            <p className="mt-1 text-right text-[11px] text-faint">Ctrl / ⌘ + Enter 保存</p>
+            <p className="mt-1 text-right text-[11px] text-faint">内容会自动保存，无需手动提交</p>
           </section>
 
           <AttachmentList
@@ -429,7 +444,7 @@ export function CardDetailDrawer({
             <Trash2 className="h-3.5 w-3.5" />
             删除
           </Button>
-          <Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void closeWithSave()}>
+          <Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={handleClose}>
             关闭
           </Button>
         </footer>
