@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import next from "next";
 import { loadEnv } from "./lib/env.mjs";
 import { attachCollabServer } from "./lib/collab/server.mjs";
+import { attachSystemSocket } from "./lib/system/realtime.mjs";
 
 loadEnv(process.cwd());
 
@@ -23,6 +24,8 @@ const server = createServer((request, response) => {
 
 // 协作 WebSocket 与 Next 共用同一端口
 attachCollabServer(server);
+// 系统通知通道：强制更新等全员广播
+attachSystemSocket(server);
 
 server.listen(port, hostname, () => {
   console.log(

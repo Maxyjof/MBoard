@@ -86,6 +86,15 @@
 - 画板元素级撤销 / 重做，支持快捷键；「查看历史」用独立只读画布预览过去的版本，不会回退共享状态
 - 画板不再提供「清空画布」，需要新内容时新建画板即可
 
+### 自动更新
+- 侧边栏底部「检查更新」直接比对服务器上的 `main` 分支，把新提交列出来
+- 确认后通知所有在线用户，全员 15 秒倒计时结束自动退回主界面
+- 云服务器拉取代码 → 重建镜像 → 重启容器，**构建或健康检查失败会自动回滚到上一版本**
+- 更新中可以在页面里展开实时构建日志，失败时也能直接看到原因
+- 执行者是独立的 `mboard-updater` 容器，应用容器不持有 docker 权限，也不碰 git
+
+![检查更新](docs/screenshots/update-check.png)
+
 ## 技术栈
 
 | 层 | 选型 |
@@ -98,7 +107,7 @@
 | 拖拽 | dnd-kit |
 | Markdown | react-markdown + remark-gfm |
 | 鉴权 | jose（JWT）+ bcryptjs |
-| 部署 | Docker Compose（单容器 + 数据卷） |
+| 部署 | Docker Compose（应用容器 + 常驻更新容器 + 数据卷） |
 
 ## 快速开始（本地）
 
@@ -130,6 +139,9 @@ cp .env.example .env                          # Windows PowerShell: copy .env.ex
 cp config/accounts.example.yml config/accounts.yml
 # 修改 .env 里的 AUTH_SECRET，以及 config/accounts.yml 里的账号密码
 
+# 让「检查更新」按钮能工作在服务器上重建，只需执行一次
+echo "MBOARD_ROOT=$(pwd)" >> .env
+
 docker compose up -d --build
 # 打开 http://服务器IP:3000
 ```
@@ -137,6 +149,7 @@ docker compose up -d --build
 - 数据库与上传文件：`./data`（挂载进容器 `/app/data`，备份这个目录即可）
 - 账号配置：`./config/accounts.yml`（只读挂载，改完 `docker compose restart`）
 - 容器启动时自动执行 `prisma db push` 和幂等种子脚本
+- 更新服务的原理、协议与排错见 [自动更新文档](docs/UPDATE.md)
 - 反向代理、HTTPS、备份升级见 [部署文档](docs/DEPLOY.md)
 
 ## 账号配置
@@ -182,6 +195,8 @@ npm run hash -- "你的新密码"
 | `npm run typecheck` | TypeScript 全量检查 |
 | `npm run db:seed` | 手动补种子数据（幂等） |
 | `npm run hash -- "密码"` | 生成 bcrypt 哈希 |
+| `npm run mock` | 本地假更新服务，不开 docker 也能走完整更新流程 |
+| `npm run update:e2e` | 配合 `npm run mock` 的更新流程端到端验证 |
 
 ## 目录结构
 
@@ -197,17 +212,20 @@ MBoard/
 ├── components/
 │   ├── ui/                 # 基础组件
 │   ├── workspace/          # 侧边栏、工作台外壳
+│   ├── system/             # 检查更新入口与强制更新闸门
 │   ├── kanban/             # 看板组件
 │   └── canvas/             # 画布编辑器与资源面板
 ├── lib/
-│   ├── auth/               # 会话、账号配置
+│   ├── auth/               # 会话、账号配置、长连接鉴权
 │   ├── collab/             # Yjs 服务端 + 浏览器 Provider
+│   ├── system/             # 更新状态通道与 spool 读写
 │   └── prisma.ts
 ├── prisma/                 # schema 与种子数据
 ├── config/accounts.yml     # 账号白名单
 ├── docker/                 # 容器入口脚本
+│   └── updater/            # 常驻更新容器（git + docker compose）
 ├── docs/                   # 契约、架构、部署、截图
-└── server.mjs              # Next + WebSocket 统一入口
+└── server.mjs              # Next + 协作/系统 WebSocket 统一入口
 ```
 
 ## 文档
@@ -215,6 +233,7 @@ MBoard/
 - [架构与协作机制](docs/ARCHITECTURE.md)
 - [Docker / 云服务器部署](docs/DEPLOY.md)
 - [开发契约与接口清单](docs/CONTRACT.md)
+- [自动更新机制与排错](docs/UPDATE.md)
 
 ## 已知限制
 
@@ -232,4 +251,8 @@ node scripts/collab-test.mjs <canvasId>          # 协议层双端同步测试
 node scripts/collab-e2e.mjs <canvasId>           # 双标签页真实协作（仅开发模式）
 node scripts/cursor-e2e.mjs <canvasId>           # 双账号光标与用户名验证（仅开发模式）
 node scripts/browser-check.mjs /boards board.png # 无头浏览器截图 + 控制台检查
+node scripts/mock-updater.mjs                    # 本地假更新服务（不开 docker）
+node scripts/update-e2e.mjs                      # 更新流程端到端验证（需先起 mock）
 ```
+
+> 更新相关的两个脚本只读写 `data/update` 目录，不会碰真实代码与容器，可以随便跑。

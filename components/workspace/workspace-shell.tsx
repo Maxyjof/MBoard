@@ -12,13 +12,15 @@ type WorkspaceShellProps = {
   user: AppUser;
   boards: BoardSummary[];
   myTaskCount: number;
+  appVersion: { version: string; commit: string };
   children: React.ReactNode;
 };
 
+// 侧边栏折叠偏好存在本地，刷新后保持
 const COLLAPSE_KEY = "mb-sidebar-collapsed";
 
 // 工作台外壳：桌面侧边栏 + 移动端抽屉
-export function WorkspaceShell({ user, boards, myTaskCount, children }: WorkspaceShellProps) {
+export function WorkspaceShell({ user, boards, myTaskCount, appVersion, children }: WorkspaceShellProps) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -67,6 +69,7 @@ export function WorkspaceShell({ user, boards, myTaskCount, children }: Workspac
           collapsed={collapsed}
           onToggleCollapse={toggleCollapse}
           onLogout={logout}
+          appVersion={appVersion}
         />
       </div>
 
@@ -97,6 +100,7 @@ export function WorkspaceShell({ user, boards, myTaskCount, children }: Workspac
             collapsed={false}
             onToggleCollapse={toggleCollapse}
             onLogout={logout}
+            appVersion={appVersion}
             mobile
             onCloseMobile={() => setMobileOpen(false)}
             onNavigate={() => setMobileOpen(false)}

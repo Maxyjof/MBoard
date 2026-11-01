@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { parseAssignees } from "@/lib/kanban";
+import { appVersion } from "@/lib/system/spool";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import type { BoardSummary } from "@/lib/types";
 
@@ -48,7 +49,12 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   }));
 
   return (
-    <WorkspaceShell user={session} boards={summaries} myTaskCount={myTaskCount}>
+    <WorkspaceShell
+      user={session}
+      boards={summaries}
+      myTaskCount={myTaskCount}
+      appVersion={appVersion()}
+    >
       {children}
     </WorkspaceShell>
   );

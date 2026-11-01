@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # 构建时烧入当前提交，应用启动后写进 spool 的 app.json 供更新容器判断真实运行版本
+        MB_COMMIT: "${MB_COMMIT:-unknown}"
     image: mboard:latest
     container_name: mboard
     restart: unless-stopped
@@ -22,6 +25,7 @@ services:
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
     volumes:
       # 数据库与上传文件都在 data/ 下，备份这个目录即可
+      # data/update 也在其中，应用与更新容器靠它交换请求和状态
       - ./data:/app/data
       # 账号配置只读挂载，改完重启容器生效
       - ./config:/app/config:ro
@@ -37,3 +41,41 @@ services:
       timeout: 5s
       retries: 3
       start_period: 40s
+
+  # 常驻更新容器：独占 docker.sock 与 git 写权限，只重建 mboard 这一个服务
+  # 它自己永远不会被重建，否则重建到一半进程被杀，失败后再没有人收尾
+  # 改了本服务的代码或配置后需要手动执行一次 docker compose up -d updater
+  updater:
+    build:
+      context: .
+      dockerfile: docker/updater/Dockerfile
+    image: mboard-updater:latest
+    container_name: mboard-updater
+    restart: unless-stopped
+    environment:
+      # 必须是宿主机上项目的绝对路径，容器里也挂到同一路径
+      # 用减号兜底而不是问号必填，否则没配置的机器连 build mboard 都会因插值失败
+      # 兜底目录不存在时启动自检会提示「请在 .env 里加一行 MBOARD_ROOT=项目的绝对路径」
+      MBOARD_ROOT: "${MBOARD_ROOT:-/opt/MBoard}"
+      SPOOL_DIR: "/spool"
+      TZ: "${TZ:-Asia/Shanghai}"
+    volumes:
+      # 信箱目录：mboard 容器里对应 /app/data/update
+      - ./data/update:/spool
+      # 项目根以同一绝对路径挂进容器，compose 解析出的宿主路径才不会指错地方
+      - "${MBOARD_ROOT:-/opt/MBoard}:${MBOARD_ROOT:-/opt/MBoard}"
+      # 只有更新容器拿到宿主机 docker，应用容器不挂这个 socket
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      # 心跳 15 秒内没刷新就认为常驻进程已经不可用
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const fs=require('fs');try{const s=fs.statSync('/spool/heartbeat.json');process.exit(Date.now()-s.mtimeMs<15000?0:1)}catch{process.exit(1)}",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

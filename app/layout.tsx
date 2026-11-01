@@ -3,6 +3,7 @@ import "./globals.css";
 import "vditor/dist/index.css";
 import { AppToaster } from "@/components/ui/toaster";
 import { AppPathBootstrap } from "@/components/app-path-bootstrap";
+import { UpdateGate } from "@/components/system/update-gate";
 
 export const metadata: Metadata = {
   title: {
@@ -12,7 +13,8 @@ export const metadata: Metadata = {
   description: "看板与无限画布一体的团队工作台，支持多人实时协作",
   applicationName: "MBoard",
   icons: {
-    icon: "/favicon.svg",
+    // Next 不会给 metadata 里的图标自动补 basePath，站点部署在 /mboard 下必须写全
+    icon: "/mboard/favicon.svg",
   },
 };
 
@@ -61,6 +63,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AppPathBootstrap />
         {children}
+        {/* 强制更新通知挂在最外层，全屏画布和登录页也能收到 */}
+        <UpdateGate />
         <AppToaster />
       </body>
     </html>

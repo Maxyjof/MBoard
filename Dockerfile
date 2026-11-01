@@ -1,6 +1,10 @@
 # MBoard 生产镜像：多阶段构建，运行期只保留生产依赖
 FROM node:22-bookworm-slim AS builder
 
+# 构建提交号由 compose 以 MB_COMMIT 传入，builder 里只用于输出构建信息
+ARG MB_COMMIT=unknown
+ENV MB_COMMIT=$MB_COMMIT
+
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL="file:../data/mboard.db"
@@ -30,6 +34,11 @@ RUN node scripts/copy-vditor.mjs \
 
 FROM node:22-bookworm-slim AS runner
 
+# 构建提交号烧进镜像：应用启动时读 process.env.MB_COMMIT 写进 spool 的 app.json
+# 更新容器靠它判断“现在真正在跑的是哪个版本”，比仓库 HEAD 可靠
+ARG MB_COMMIT=unknown
+ENV MB_COMMIT=$MB_COMMIT
+
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -56,6 +65,9 @@ COPY --from=builder /app/next.config.mjs ./next.config.mjs
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/lib/env.mjs ./lib/env.mjs
 COPY --from=builder /app/lib/collab ./lib/collab
+# 协作长连接与系统通知共用 lib/auth 的会话校验，应用侧 spool 读写放在 lib/system
+COPY --from=builder /app/lib/auth ./lib/auth
+COPY --from=builder /app/lib/system ./lib/system
 COPY --from=builder /app/scripts/hash-password.mjs ./scripts/hash-password.mjs
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 

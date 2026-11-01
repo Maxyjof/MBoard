@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import type { AppUser, BoardSummary } from "@/lib/types";
 import { CreateBoardDialog } from "@/components/workspace/create-board-dialog";
 import { WorkHistory } from "@/components/workspace/work-history";
+import { UpdateChecker } from "@/components/system/update-checker";
 
 type SidebarProps = {
   user: AppUser;
@@ -35,6 +36,7 @@ type SidebarProps = {
   onToggleCollapse: () => void;
   onNavigate?: () => void;
   onLogout: () => void;
+  appVersion: { version: string; commit: string };
   mobile?: boolean;
   onCloseMobile?: () => void;
 };
@@ -48,6 +50,7 @@ export function Sidebar({
   onToggleCollapse,
   onNavigate,
   onLogout,
+  appVersion,
   mobile = false,
   onCloseMobile,
 }: SidebarProps) {
@@ -201,7 +204,12 @@ export function Sidebar({
           <div className="flex-1" />
         )}
 
-        <div className={cn("border-t border-line p-2", collapsed && !mobile && "flex justify-center")}>
+        <div className={cn("border-t border-line p-2", collapsed && !mobile && "flex flex-col items-center")}>
+          <UpdateChecker
+            collapsed={collapsed && !mobile}
+            version={appVersion.version}
+            commit={appVersion.commit}
+          />
           <UserMenu
             user={user}
             collapsed={collapsed && !mobile}

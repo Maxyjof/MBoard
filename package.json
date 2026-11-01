@@ -17,6 +17,8 @@
     "db:seed": "node prisma/seed.mjs",
     "hash": "node scripts/hash-password.mjs",
     "warm": "node scripts/warmup.mjs",
+    "mock": "node scripts/mock-updater.mjs",
+    "update:e2e": "node scripts/update-e2e.mjs",
     "setup": "prisma generate && prisma db push && node prisma/seed.mjs"
   },
   "dependencies": {
