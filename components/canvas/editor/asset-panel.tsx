@@ -5,10 +5,10 @@ import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import {
   ArrowUpRight,
-  Boxes,
   Circle,
   Diamond,
   Download,
+  FilePlus2,
   FileText,
   FileUp,
   Frame,
@@ -23,7 +23,6 @@ import {
   Table2,
   Trash2,
   Type,
-  Ungroup,
   Video,
   X,
 } from "lucide-react";
@@ -48,7 +47,6 @@ const DocumentEditorDialog = dynamic(
 );
 import {
   activateTool,
-  groupSelectedElements,
   insertCompositeCard,
   insertDocCard,
   insertFileCard,
@@ -59,7 +57,6 @@ import {
   insertText,
   insertVideoCard,
   updateTableCard,
-  ungroupSelectedElements,
   updateCompositeCard,
 } from "./insert";
 import { blobToDataURL, uploadAsset } from "./scene-assets";
@@ -390,7 +387,8 @@ export function AssetPanel({
     }
   }
 
-  async function createBlankDoc() {
+  // 新建 Markdown 文档：insertToCanvas 为真时创建后直接插入画布，省去先导入再插入的步骤
+  async function createBlankDoc(options: { insertToCanvas?: boolean; tab?: "docs" } = {}) {
     setBusy("newdoc");
     try {
       const response = await fetch("/api/documents", {
@@ -407,9 +405,15 @@ export function AssetPanel({
         toast.error(data.error || "创建文档失败");
         return;
       }
-      setTab("docs");
+      const created = data.document;
       await loadDocs(query.trim());
-      setActiveDoc(data.document);
+      if (options.insertToCanvas) {
+        withApi((api) => void insertDocCard(api, created));
+        toast.success(`已创建「${created.title}」并插入画布`);
+      } else {
+        setTab(options.tab ?? "docs");
+      }
+      setActiveDoc(created);
       setDialogOpen(true);
     } catch {
       toast.error("创建文档失败");
@@ -599,6 +603,11 @@ export function AssetPanel({
                 onClick={() => void createTableDoc()}
               />
               <InsertTile
+                label="文档"
+                icon={busy === "newdoc" ? <Loader2 className="animate-spin" /> : <FilePlus2 />}
+                onClick={() => void createBlankDoc({ insertToCanvas: true })}
+              />
+              <InsertTile
                 label="画框"
                 icon={<Frame />}
                 onClick={() =>
@@ -612,31 +621,6 @@ export function AssetPanel({
                 label="组合卡片"
                 icon={<LayoutPanelTop />}
                 onClick={() => setCompositeMode({})}
-              />
-              <InsertTile
-                label="分组"
-                icon={<Boxes />}
-                onClick={() =>
-                  withApi(async (api) => {
-                    const grouped = await groupSelectedElements(api);
-                    if (grouped) {
-                      toast.success("已分组，拖动任意成员即可整体移动");
-                    } else {
-                      toast.info("请先选中要分组的元素");
-                    }
-                  })
-                }
-              />
-              <InsertTile
-                label="取消分组"
-                icon={<Ungroup />}
-                onClick={() =>
-                  withApi((api) => {
-                    const ungrouped = ungroupSelectedElements(api);
-                    if (ungrouped) toast.success("已取消分组");
-                    else toast.info("选中的元素没有分组");
-                  })
-                }
               />
             </div>
 
@@ -664,7 +648,7 @@ export function AssetPanel({
             </div>
 
             <p className="px-1 text-[11px] leading-5 text-faint">
-              提示：文档/文件卡片单击即可打开；「画框」拖入图片/文本会自动收纳；「组合卡片」是带标题和字段的故事卡；「分组」用来把任意元素打包移动。
+              提示：文档/文件卡片单击即可打开；「画框」拖入图片/文本会自动收纳；「组合卡片」是带标题和字段的故事卡；插入视频后播放器直接呈现在画布上，点开即可播放。
             </p>
           </div>
         ) : (
@@ -827,6 +811,24 @@ export function AssetPanel({
         }}
       />
 
+      {/* 视频播放 */}
+      <Modal
+        open={Boolean(videoOpen)}
+        onOpenChange={(open) => !open && setVideoOpen(null)}
+        size="xl"
+        title="视频预览"
+      >
+        {videoOpen ? (
+          <video
+            key={videoOpen}
+            src={`/mboard/api/assets/${videoOpen}`}
+            controls
+            autoPlay
+            className="max-h-[65vh] w-full rounded-xl bg-black"
+          />
+        ) : null}
+      </Modal>
+
       {/* 文件预览与下载 */}
       <Modal
         open={Boolean(filePreview)}
@@ -873,24 +875,6 @@ export function AssetPanel({
               </p>
             </div>
           )
-        ) : null}
-      </Modal>
-
-      {/* 视频播放 */}
-      <Modal
-        open={Boolean(videoOpen)}
-        onOpenChange={(open) => !open && setVideoOpen(null)}
-        size="xl"
-        title="视频预览"
-      >
-        {videoOpen ? (
-          <video
-            key={videoOpen}
-                    src={`/mboard/api/assets/${videoOpen}`}
-            controls
-            autoPlay
-            className="max-h-[65vh] w-full rounded-xl bg-black"
-          />
         ) : null}
       </Modal>
 

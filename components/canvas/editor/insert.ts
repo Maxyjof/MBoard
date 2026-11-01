@@ -799,10 +799,13 @@ export async function groupSelectedElements(api: ExcalidrawImperativeAPI): Promi
 
   const background = built[0] as any;
   const title = built[1] as any;
-  background.groupIds = [groupId];
-  background.customData = { mbGroup: "1" };
-  title.groupIds = [groupId];
-  title.customData = { mbGroup: "1" };
+  // 容器与标题不加入 groupIds：否则一选中容器就连带选中全部成员，
+  // Excalidraw 就不会给出缩放手柄，边框比例无法手动调整。
+  // 分组归属改由 customData.mbGroupId 记录，成员之间仍共享 groupId。
+  background.groupIds = [];
+  background.customData = { mbGroup: "1", mbGroupId: groupId, mbGroupKind: "container" };
+  title.groupIds = [];
+  title.customData = { mbGroup: "1", mbGroupId: groupId, mbGroupKind: "title" };
 
   const selectedSet = new Set(selectedIds);
   const updated = elements.map((element) => {
@@ -842,20 +845,31 @@ export function ungroupSelectedElements(api: ExcalidrawImperativeAPI): boolean {
   );
   const elements = api.getSceneElements();
   const selected = elements.filter((element) => selectedIds.includes(element.id));
-  const groupIds = new Set(selected.flatMap((element) => (element as any).groupIds || []));
+  const groupIds = new Set<string>();
+  for (const element of selected as any[]) {
+    for (const id of (element.groupIds || []) as string[]) groupIds.add(String(id));
+    const key = groupKeyOf(element);
+    if (key) groupIds.add(key);
+  }
   if (groupIds.size === 0) return false;
 
-  const next = elements.map((element) => {
-    const current = (element as any).groupIds || [];
-    const remaining = current.filter((id: string) => !groupIds.has(id));
-    if (remaining.length === current.length) return element;
-    return {
-      ...element,
-      groupIds: remaining,
-      version: element.version + 1,
-      versionNonce: Math.floor(Math.random() * 2 ** 31),
-    };
-  });
+  // 分组容器与标题也要删除，否则画布上会残留一个空框
+  const next = elements
+    .filter((element: any) => {
+      const key = groupKeyOf(element);
+      return !(key && groupIds.has(key));
+    })
+    .map((element) => {
+      const current = (element as any).groupIds || [];
+      const remaining = current.filter((id: string) => !groupIds.has(id));
+      if (remaining.length === current.length) return element;
+      return {
+        ...element,
+        groupIds: remaining,
+        version: element.version + 1,
+        versionNonce: Math.floor(Math.random() * 2 ** 31),
+      };
+    });
 
   api.updateScene({
     elements: next as any,
@@ -864,6 +878,168 @@ export function ungroupSelectedElements(api: ExcalidrawImperativeAPI): boolean {
   return true;
 }
 
+// ===== 分组容器：识别 / 定位 / 收人 / 重排 =====
+// 容器与标题用 customData.mbGroup + mbGroupId 标记，成员用 groupIds 归属
+export function groupKeyOf(element: any): string | null {
+  if (!element?.customData?.mbGroup) return null;
+  const key = element.customData.mbGroupId || (element.groupIds || [])[0];
+  return key ? String(key) : null;
+}
+export function isGroupContainer(element: any): boolean {
+  return Boolean(element?.customData?.mbGroup) && element?.customData?.mbGroupKind !== "title";
+}
+// 判断点在哪个分组容器内部（取最上层）
+export function findGroupContainerAt(
+  elements: readonly any[],
+  point: { x: number; y: number }
+): any {
+  const list = (elements as any[]).filter(
+    (element: any) => element && !element.isDeleted && !element.locked && isGroupContainer(element)
+  );
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const container = list[index];
+    if (
+      point.x >= container.x &&
+      point.x <= container.x + container.width &&
+      point.y >= container.y &&
+      point.y <= container.y + container.height
+    ) {
+      return container;
+    }
+  }
+  return null;
+}
+// 历史数据把容器/标题写进了 groupIds，拆出来，否则选中容器会连带选中全部成员
+export function normalizeGroupContainers(api: ExcalidrawImperativeAPI): boolean {
+  const elements = api.getSceneElements() as any[];
+  let changed = false;
+  const next = elements.map((element) => {
+    if (!element?.customData?.mbGroup) return element;
+    const key = groupKeyOf(element);
+    if (!key) return element;
+    const hasGroup = ((element.groupIds || []) as string[]).length > 0;
+    if (!hasGroup && element.customData.mbGroupId) return element;
+    changed = true;
+    return {
+      ...element,
+      groupIds: [],
+      customData: { ...(element.customData || {}), mbGroupId: key },
+      version: element.version + 1,
+      versionNonce: Math.floor(Math.random() * 2 ** 31),
+    };
+  });
+  if (changed) {
+    api.updateScene({ elements: next as any, captureUpdate: "NEVER" as any });
+  }
+  return changed;
+}
+// 取分组里的成员元素（排除容器与标题）
+export function groupMembers(elements: readonly any[], key: string): any[] {
+  return (elements as any[]).filter(
+    (element: any) =>
+      element &&
+      !element.isDeleted &&
+      !element.customData?.mbGroup &&
+      ((element.groupIds || []) as string[]).includes(key)
+  );
+}
+// 按成员重算容器包围盒；容器被手动缩放后传入 keepSize 表示只平移不改尺寸
+export function recomputeGroupBounds(
+  api: ExcalidrawImperativeAPI,
+  key: string,
+  options: { keepSize?: boolean } = {}
+): boolean {
+  const elements = api.getSceneElements() as any[];
+  const members = groupMembers(elements, key);
+  if (members.length === 0) return false;
+  const minX = Math.min(...members.map((element) => element.x));
+  const minY = Math.min(...members.map((element) => element.y));
+  const maxX = Math.max(...members.map((element) => element.x + element.width));
+  const maxY = Math.max(...members.map((element) => element.y + element.height));
+  const next = elements.map((element: any) => {
+    if (groupKeyOf(element) !== key) return element;
+    const isContainer = isGroupContainer(element);
+    if (options.keepSize && isContainer) return element;
+    let patch = isContainer
+      ? {
+          x: minX - 28,
+          y: minY - 58,
+          width: Math.max(120, maxX - minX + 56),
+          height: Math.max(80, maxY - minY + 86),
+        }
+      : { x: minX, y: minY - 44 };
+    if (isContainer) {
+      // 与现有容器框取并集：手动拉大过比例后，新成员进来只扩不缩
+      const boxRight = Math.max(maxX + 28, element.x + element.width);
+      const boxBottom = Math.max(maxY + 28, element.y + element.height);
+      const boxLeft = Math.min(minX - 28, element.x);
+      const boxTop = Math.min(minY - 58, element.y);
+      patch = {
+        x: boxLeft,
+        y: boxTop,
+        width: Math.max(120, boxRight - boxLeft),
+        height: Math.max(80, boxBottom - boxTop),
+      };
+    }
+    return {
+      ...element,
+      ...patch,
+      version: element.version + 1,
+      versionNonce: Math.floor(Math.random() * 2 ** 31),
+    };
+  });
+  api.updateScene({ elements: next as any, captureUpdate: "IMMEDIATELY" });
+  return true;
+}
+// 把元素并入分组，容器随之扩容
+export function addElementToGroup(
+  api: ExcalidrawImperativeAPI,
+  key: string,
+  elementId: string
+): boolean {
+  const elements = api.getSceneElements() as any[];
+  const target = elements.find((element: any) => element.id === elementId) as any;
+  if (!target || target.isDeleted || target.customData?.mbGroup) return false;
+  if (((target.groupIds || []) as string[]).includes(key)) return false;
+  const next = elements.map((element: any) =>
+    element.id === elementId
+      ? {
+          ...element,
+          groupIds: [...(((element as any).groupIds || []) as string[]), key],
+          version: element.version + 1,
+          versionNonce: Math.floor(Math.random() * 2 ** 31),
+        }
+      : element
+  );
+  api.updateScene({ elements: next as any, captureUpdate: "IMMEDIATELY" });
+  recomputeGroupBounds(api, key);
+  return true;
+}
+// 把元素移出分组
+export function removeElementFromGroup(
+  api: ExcalidrawImperativeAPI,
+  key: string,
+  elementId: string
+): boolean {
+  const elements = api.getSceneElements() as any[];
+  const target = elements.find((element: any) => element.id === elementId) as any;
+  if (!target) return false;
+  const current = ((target.groupIds || []) as string[]).filter((id) => id !== key);
+  if (current.length === ((target.groupIds || []) as string[]).length) return false;
+  const next = elements.map((element: any) =>
+    element.id === elementId
+      ? {
+          ...element,
+          groupIds: current,
+          version: element.version + 1,
+          versionNonce: Math.floor(Math.random() * 2 ** 31),
+        }
+      : element
+  );
+  api.updateScene({ elements: next as any, captureUpdate: "IMMEDIATELY" });
+  recomputeGroupBounds(api, key);
+  return true;
+}
 // 设置激活工具（画矩形/箭头等）
 export function activateTool(
   api: ExcalidrawImperativeAPI,

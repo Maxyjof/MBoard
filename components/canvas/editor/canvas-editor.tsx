@@ -36,10 +36,14 @@ import { SceneBinding } from "./scene-binding";
 import { fetchAssetDataURL, hydrateSceneFiles, uploadAsset } from "./scene-assets";
 import {
   absorbElementIntoCompositeCard,
+  addElementToGroup,
+  findGroupContainerAt,
+  groupKeyOf,
   insertDocCard,
   insertFileCard,
   insertVideoCard,
   migrateCompositeCards,
+  normalizeGroupContainers,
   syncFrameChildren,
 } from "./insert";
 import { parseCompositeCardData, type CompositeCardData } from "@/components/canvas/composite-card-render";
@@ -111,6 +115,8 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
   const [selection, setSelection] = useState<CanvasSelection | null>(null);
   const [collaborators, setCollaborators] = useState<CollaboratorInfo[]>([]);
   const [openRequest, setOpenRequest] = useState<OpenElementRequest | null>(null);
+  // 记录上一次单击，用于区分单击选中与双击打开
+  const lastClickRef = useRef<{ id: string; time: number } | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const dragDepthRef = useRef(0);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
@@ -176,6 +182,8 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
     }
   }, []);
   const pressedElementIdRef = useRef<string | null>(null);
+  // 记录每个分组成员的包围盒左上角，用于让分组容器框跟随成员一起平移
+  const groupBoundsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const canvasPressRef = useRef<{
     hit: {
       kind: "doc" | "video" | "file" | "composite";
@@ -474,8 +482,83 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
     (api: ExcalidrawImperativeAPI) => {
       apiRef.current = api;
 
+      // 按下时记录各分组成员的包围盒基线，pointerup 时用它算出本次拖动的位移
+      const seedGroupBaseline = (target: ExcalidrawImperativeAPI) => {
+        const elements = target.getSceneElements() as any[];
+        const keys = new Set<string>();
+        for (const element of elements) {
+          const key = groupKeyOf(element);
+          if (key) keys.add(key);
+        }
+        for (const key of keys) {
+          const members = elements.filter(
+            (element: any) =>
+              element &&
+              !element.isDeleted &&
+              !element.customData?.mbGroup &&
+              ((element.groupIds || []) as string[]).includes(key)
+          );
+          if (members.length === 0) continue;
+          groupBoundsRef.current.set(key, {
+            x: Math.min(...members.map((member) => member.x)),
+            y: Math.min(...members.map((member) => member.y)),
+          });
+        }
+      };
+
+      // 分组成员移动后，容器框与标题按相同位移跟过去（只平移，保留手动调整过的尺寸）
+      const syncGroupChrome = (target: ExcalidrawImperativeAPI) => {
+        const elements = target.getSceneElements() as any[];
+        const keys = new Set<string>();
+        for (const element of elements) {
+          const key = groupKeyOf(element);
+          if (key) keys.add(key);
+        }
+        if (keys.size === 0) return;
+        const shifts = new Map<string, { dx: number; dy: number }>();
+        for (const key of keys) {
+          const members = elements.filter(
+            (element: any) =>
+              element &&
+              !element.isDeleted &&
+              !element.customData?.mbGroup &&
+              ((element.groupIds || []) as string[]).includes(key)
+          );
+          if (members.length === 0) continue;
+          const minX = Math.min(...members.map((member) => member.x));
+          const minY = Math.min(...members.map((member) => member.y));
+          const previous = groupBoundsRef.current.get(key);
+          groupBoundsRef.current.set(key, { x: minX, y: minY });
+          if (!previous) continue;
+          const dx = minX - previous.x;
+          const dy = minY - previous.y;
+          if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) continue;
+          shifts.set(key, { dx, dy });
+        }
+        if (shifts.size === 0) return;
+        let changed = false;
+        const next = elements.map((element: any) => {
+          const key = groupKeyOf(element);
+          if (!key) return element;
+          const shift = shifts.get(key);
+          if (!shift) return element;
+          changed = true;
+          return {
+            ...element,
+            x: element.x + shift.dx,
+            y: element.y + shift.dy,
+            version: element.version + 1,
+            versionNonce: Math.floor(Math.random() * 2 ** 31),
+          };
+        });
+        if (changed) {
+          target.updateScene({ elements: next as any, captureUpdate: "IMMEDIATELY" });
+        }
+      };
+
       api.onPointerDown((_activeTool, pointerDownState, event) => {
         pointerDownRef.current = true;
+        seedGroupBaseline(api);
 
         // 记录这次点击命中的卡片，双击时用它判断目标
         // 只取鼠标最上层的命中元素，避免重叠卡片时优先打开下层文档
@@ -523,6 +606,9 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         // 拖拽结束后同步画框 children，保证子元素随画框移动
         syncFrameChildren(api);
 
+        // 分组成员被拖动后，让分组容器框与标题一起平移
+        syncGroupChrome(api);
+
         // 自己判断单击：位移小且时间短；拖拽/框选/缩放不会触发
         const press = canvasPressRef.current;
         canvasPressRef.current = null;
@@ -535,7 +621,16 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
           : Number.POSITIVE_INFINITY;
         if (press?.hit && distance < 5 && Date.now() - press.time < 600) {
           setPanelOpen(true);
-          setOpenRequest({ ...press.hit, seq: Date.now() });
+          const hit = press.hit;
+          const now = Date.now();
+          const previous = lastClickRef.current;
+          const isDoubleClick =
+            previous !== null && previous.id === hit.id && now - previous.time < 420;
+          lastClickRef.current = isDoubleClick ? null : { id: hit.id, time: now };
+          // 单击只选中并展开右侧面板；双击或 Ctrl/Cmd+点击才打开文件内容
+          if (isDoubleClick || event.ctrlKey || event.metaKey) {
+            setOpenRequest({ ...hit, seq: Date.now() });
+          }
           return;
         }
 
@@ -565,6 +660,29 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
                 if (absorbed) toast.success("已加入组合卡片");
               });
             }
+            // 拖到分组容器里：把元素并入该分组，容器框自动扩容
+            const sceneElements = api.getSceneElements() as any[];
+            const dropped = sceneElements.find((element: any) => element.id === pressedId) as any;
+            const groupKeys = new Set<string>();
+            for (const element of sceneElements) {
+              const key = groupKeyOf(element);
+              if (key) groupKeys.add(key);
+            }
+            const alreadyGrouped = dropped
+              ? ((dropped.groupIds || []) as string[]).some((id) => groupKeys.has(String(id)))
+              : true;
+            if (
+              dropped &&
+              dropped.type !== "frame" &&
+              !dropped.customData?.mbGroup &&
+              !alreadyGrouped
+            ) {
+              const container = findGroupContainerAt(sceneElements, { x: sceneX, y: sceneY });
+              const key = container ? groupKeyOf(container) : null;
+              if (key && addElementToGroup(api, key, pressedId)) {
+                toast.success("已加入分组");
+              }
+            }
           }
         }
       });
@@ -578,6 +696,9 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
           pendingRemoteRef.current = false;
           scheduleRemoteApplyRef.current?.();
         }
+
+        // 历史数据把分组容器写进了 groupIds，拆出来才能单独选中并出现缩放手柄
+        normalizeGroupContainers(api);
 
         // 开发环境暴露调试句柄，便于端到端自动化验证
         if (process.env.NODE_ENV !== "production") {
@@ -941,6 +1062,14 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       initial: Map<string, { x: number; y: number }>;
     } | null = null;
 
+    // 无填充形状（矩形/椭圆/菱形）内部空白被点中后接管拖拽的状态
+    let shapeDrag: {
+      startX: number;
+      startY: number;
+      moved: boolean;
+      initial: Map<string, { x: number; y: number }>;
+    } | null = null;
+
     function scenePoint(api: ExcalidrawImperativeAPI, clientX: number, clientY: number) {
       const state = api.getAppState();
       const zoom = state.zoom?.value ?? 1;
@@ -1026,6 +1155,146 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       if (api) syncFrameChildren(api);
     }
 
+    // Excalidraw 对无填充（transparent / hollow）的矩形、菱形、圆形只按描边判定命中，
+    // 点在内部空白处会落空并退化成框选。这里补一层几何兜底，
+    // 让这三种形状的内部点击与有填充元素保持一致。
+    // 元素未旋转时 x/y 是外接框左上角，中心点不随 angle 变化，
+    // 因此先把点绕中心反向旋转回元素自身坐标系，再按矩形/菱形/椭圆判断归属。
+    function pointInShape(element: any, point: { x: number; y: number }) {
+      const { width, height, type } = element;
+      if (!width || !height) return false;
+      const centerX = element.x + width / 2;
+      const centerY = element.y + height / 2;
+      let localX = point.x - centerX;
+      let localY = point.y - centerY;
+      const angle = typeof element.angle === "number" ? element.angle : 0;
+      if (angle) {
+        const cos = Math.cos(-angle);
+        const sin = Math.sin(-angle);
+        const rotatedX = localX * cos - localY * sin;
+        const rotatedY = localX * sin + localY * cos;
+        localX = rotatedX;
+        localY = rotatedY;
+      }
+      // 描边一半宽度作为容差，贴着线框点也能命中
+      const strokeWidth = typeof element.strokeWidth === "number" ? element.strokeWidth : 1;
+      const padding = strokeWidth / 2;
+      const halfWidth = width / 2 + padding;
+      const halfHeight = height / 2 + padding;
+      if (halfWidth <= 0 || halfHeight <= 0) return false;
+      const dx = localX / halfWidth;
+      const dy = localY / halfHeight;
+      if (type === "ellipse") return dx * dx + dy * dy <= 1;
+      if (type === "diamond") return Math.abs(dx) + Math.abs(dy) <= 1;
+      return Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
+    }
+
+    function isShapeWithoutFill(element: any) {
+      if (
+        element.type !== "rectangle" &&
+        element.type !== "ellipse" &&
+        element.type !== "diamond"
+      ) {
+        return false;
+      }
+      if (!element.backgroundColor || element.backgroundColor === "transparent") return true;
+      return element.fillStyle === "hollow" || element.fillStyle === "cross-hatch";
+    }
+
+    // 只兜底 Excalidraw 自身点不中的空心形状，有背景的元素仍走原生命中逻辑
+    function findHollowShapeAt(api: ExcalidrawImperativeAPI, point: { x: number; y: number }) {
+      const elements = api.getSceneElements() as any[];
+      // 数组越靠后 z 序越高，从后往前取第一个命中的元素
+      for (let index = elements.length - 1; index >= 0; index -= 1) {
+        const element = elements[index];
+        if (!element || element.isDeleted || element.locked) continue;
+        if (!isShapeWithoutFill(element)) continue;
+        if (pointInShape(element, point)) return element;
+      }
+      return null;
+    }
+
+    function handleShapePointerMove(event: PointerEvent) {
+      const dragState = shapeDrag;
+      if (!dragState) return;
+      const api = apiRef.current;
+      if (!api) return;
+
+      const point = scenePoint(api, event.clientX, event.clientY);
+      const deltaX = point.x - dragState.startX;
+      const deltaY = point.y - dragState.startY;
+      if (!dragState.moved && Math.abs(deltaX) + Math.abs(deltaY) > 2) dragState.moved = true;
+      if (!dragState.moved) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const next = (api.getSceneElements() as any[]).map((element) => {
+        const start = dragState.initial.get(element.id);
+        if (!start) return element;
+        return {
+          ...element,
+          x: start.x + deltaX,
+          y: start.y + deltaY,
+          version: element.version + 1,
+          versionNonce: Math.floor(Math.random() * 2 ** 31),
+        };
+      });
+
+      api.updateScene({ elements: next as any, captureUpdate: "IMMEDIATELY" });
+    }
+
+    function handleShapePointerUp(event: PointerEvent) {
+      const dragState = shapeDrag;
+      if (!dragState) return;
+      event.preventDefault();
+      event.stopPropagation();
+      shapeDrag = null;
+      window.removeEventListener("pointermove", handleShapePointerMove, true);
+      window.removeEventListener("pointerup", handleShapePointerUp, true);
+      const api = apiRef.current;
+      if (!api) return;
+      // 这里是自己接管坐标的拖拽，不会触发 Excalidraw 的入框逻辑，
+      // 必须按拖拽后的中心点补算 frameId，否则看着拖进画框其实仍不属于该画框。
+      if (dragState.moved) {
+        const elements = api.getSceneElements() as any[];
+        const frames = elements
+          .filter(
+            (element: any) =>
+              element.type === "frame" && !element.isDeleted && !element.locked
+          )
+          // 重叠时取最小画框，与 Excalidraw 原生收纳规则一致
+          .sort((a: any, b: any) => a.width * a.height - b.width * b.height);
+        let changed = false;
+        const next = elements.map((element: any) => {
+          if (!dragState.initial.has(element.id)) return element;
+          const centerX = element.x + element.width / 2;
+          const centerY = element.y + element.height / 2;
+          const frame = frames.find(
+            (item: any) =>
+              centerX >= item.x &&
+              centerX <= item.x + item.width &&
+              centerY >= item.y &&
+              centerY <= item.y + item.height
+          );
+          const frameId = frame ? frame.id : null;
+          const current = element.frameId ?? null;
+          if (current === frameId) return element;
+          changed = true;
+          return {
+            ...element,
+            frameId: frameId ?? undefined,
+            version: element.version + 1,
+            versionNonce: Math.floor(Math.random() * 2 ** 31),
+          };
+        });
+        if (changed) {
+          api.updateScene({ elements: next as any, captureUpdate: "NEVER" as any });
+        }
+      }
+      syncFrameChildren(api);
+    }
+
     function handlePointerDown(event: PointerEvent) {
       if (event.button !== 0) return;
       const api = apiRef.current;
@@ -1033,6 +1302,48 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       if (api.getAppState().activeTool?.type !== "selection") return;
 
       const point = scenePoint(api, event.clientX, event.clientY);
+
+      // 空心形状内部空白：Excalidraw 不会命中，这里手动选中并接管拖拽
+      const hollowShape = findHollowShapeAt(api, point) as any;
+      if (hollowShape) {
+        event.preventDefault();
+        event.stopPropagation();
+        canvasPressRef.current = null;
+        lastCanvasHitRef.current = null;
+
+        const appState = api.getAppState();
+        const selectedElementIds = event.shiftKey
+          ? { ...appState.selectedElementIds, [hollowShape.id]: true }
+          : { [hollowShape.id]: true };
+        api.updateScene({
+          appState: { selectedElementIds } as any,
+          captureUpdate: "IMMEDIATELY",
+        });
+
+        // 容器形状的标签文字是独立元素，拖动时需要一起平移
+        const ids = new Set<string>([hollowShape.id]);
+        const boundElements = Array.isArray(hollowShape.boundElements)
+          ? hollowShape.boundElements
+          : [];
+        for (const item of boundElements) {
+          if (item && item.id) ids.add(item.id);
+        }
+        const initial = new Map<string, { x: number; y: number }>();
+        for (const element of api.getSceneElements() as any[]) {
+          if (ids.has(element.id)) initial.set(element.id, { x: element.x, y: element.y });
+        }
+
+        shapeDrag = {
+          startX: point.x,
+          startY: point.y,
+          moved: false,
+          initial,
+        };
+        window.addEventListener("pointermove", handleShapePointerMove, true);
+        window.addEventListener("pointerup", handleShapePointerUp, true);
+        return;
+      }
+
       const frame = findFrameAt(api, point) as any;
       if (!frame) return;
       // 点在画框内的其他元素上时，保留元素自己的点击/拖拽
@@ -1083,6 +1394,43 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       wrapperEl.removeEventListener("pointerdown", handlePointerDown, true);
       window.removeEventListener("pointermove", handlePointerMove, true);
       window.removeEventListener("pointerup", handlePointerUp, true);
+    };
+  }, []);
+
+  // 画布滚动：普通滚轮竖向（交给 Excalidraw 原生），Alt+滚轮横向，Ctrl+Alt+滚轮斜向
+  useEffect(() => {
+    const wrapper = canvasWrapRef.current as HTMLDivElement | null;
+    if (!wrapper) return;
+
+    const onWheel = (event: WheelEvent) => {
+      // 只有按住 Alt 的组合才接管，普通竖向滚动保持原生行为
+      if (!event.altKey) return;
+      const api = apiRef.current;
+      if (!api) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const appState = api.getAppState() as any;
+      const zoom = appState.zoom?.value ?? 1;
+      // 触控板的横向手势会走 deltaX，鼠标滚轮只有 deltaY
+      const horizontalDelta = event.deltaX !== 0 ? event.deltaX : event.deltaY;
+      // Ctrl / Cmd 同时按住时为斜向滚动，竖轴也一起移动
+      const diagonal = event.ctrlKey || event.metaKey;
+
+      // 与 Excalidraw 原生滚轮一致：滚动量取负，向下滚内容上移、向右滚内容左移
+      api.updateScene({
+        appState: {
+          scrollX: (appState.scrollX || 0) - horizontalDelta / zoom,
+          scrollY: (appState.scrollY || 0) - (diagonal ? event.deltaY : 0) / zoom,
+        } as any,
+        captureUpdate: "NEVER" as any,
+      });
+    };
+
+    wrapper.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => {
+      wrapper.removeEventListener("wheel", onWheel, true);
     };
   }, []);
 
