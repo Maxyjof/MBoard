@@ -451,7 +451,6 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       const binding = bindingRef.current;
       if (!binding || !readyRef.current) return;
 
-      apiRef.current?.history.clear();
       appStateRef.current = appState;
       binding.applyLocal(elements as any, {
         viewBackgroundColor: appState.viewBackgroundColor,
@@ -661,8 +660,19 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
         };
       });
 
-      api.onPointerUp((_activeTool, _pointerDownState, event) => {
+      api.onPointerUp((activeTool, _pointerDownState, event) => {
         pointerDownRef.current = false;
+
+        // 箭头采用单次绘制模式：左键完成后自动回到选择工具，避免连续绘制
+        // 延迟到当前 Excalidraw 绘制事务结束后切换，确保箭头末端完整提交
+        if (event.button === 0 && activeTool?.type === "arrow") {
+          window.setTimeout(() => {
+            if (apiRef.current === api && api.getAppState().activeTool?.type === "arrow") {
+              api.setActiveTool({ type: "selection" } as any);
+            }
+          }, 0);
+        }
+
         if (pendingRemoteRef.current) {
           pendingRemoteRef.current = false;
           scheduleRemoteApplyRef.current?.();
@@ -1470,6 +1480,26 @@ export function CanvasEditor({ canvas, initialScene, user }: CanvasEditorProps) 
       window.removeEventListener("pointermove", handlePointerMove, true);
       window.removeEventListener("pointerup", handlePointerUp, true);
     };
+  }, []);
+
+  // 右键取消当前绘制工具，避免箭头未完成时被浏览器菜单打断
+  useEffect(() => {
+    const wrapper = canvasWrapRef.current;
+    if (!wrapper) return;
+
+    const onContextMenu = (event: MouseEvent) => {
+      const api = apiRef.current;
+      if (!api) return;
+      const activeTool = api.getAppState().activeTool?.type;
+      if (activeTool !== "selection") {
+        event.preventDefault();
+        event.stopPropagation();
+        api.setActiveTool({ type: "selection" } as any);
+      }
+    };
+
+    wrapper.addEventListener("contextmenu", onContextMenu, true);
+    return () => wrapper.removeEventListener("contextmenu", onContextMenu, true);
   }, []);
 
   // 画布滚动：普通滚轮竖向（交给 Excalidraw 原生），Alt+滚轮横向，Ctrl+Alt+滚轮斜向
