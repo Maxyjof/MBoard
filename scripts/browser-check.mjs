@@ -23,8 +23,8 @@ const outputPath = process.argv[3] || path.join(process.cwd(), "data", "shot.png
 const skipLogin = process.argv.includes("--no-login");
 const waitMs = Number(process.argv.find((arg) => arg.startsWith("--wait="))?.split("=")[1] || 9000);
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000";
-const loginUser = process.env.MB_USER || "maxy";
-const loginPass = process.env.MB_PASS || "123456";
+const loginUser = process.env.MB_USER || "admin";
+const loginPass = process.env.MB_PASS || "change-me";
 const port = 9333;
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mb-chrome-"));
 

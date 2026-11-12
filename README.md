@@ -1,6 +1,14 @@
 # MBoard
 
-> Trello 的秩序，AFFiNE 的自由。固定账号登录、全局共享的看板 + 无限画布协作工作台。
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/Maxyjof/MBoard/actions/workflows/ci.yml/badge.svg)](https://github.com/Maxyjof/MBoard/actions/workflows/ci.yml)
+[![Next.js](https://img.shields.io/badge/Next.js-15.5-black?logo=nextdotjs)](https://nextjs.org)
+[![Node](https://img.shields.io/badge/Node-%E2%89%A520-3c873a?logo=nodedotjs)](https://nodejs.org)
+
+> 看板的秩序，画布的自由。固定账号登录、全局共享的看板 + 无限画布协作工作台。
+
+MBoard 是一个可以自己部署的小团队协作工作台：看板管任务，无限画布承载想法，Yjs 做实时同步，账号由一份 YAML 白名单控制。
+没有注册流程、没有多租户、没有云端依赖，`docker compose up` 就能跑在自己的服务器上。
 
 ![登录页](docs/screenshots/login.png)
 
@@ -93,7 +101,7 @@
 - 更新中可以在页面里展开实时构建日志，失败时也能直接看到原因
 - 执行者是独立的 `mboard-updater` 容器，应用容器不持有 docker 权限，也不碰 git
 
-![检查更新](docs/screenshots/update-check.png)
+![检查更新（截图为演示数据，提交记录由 mock 脚本生成）](docs/screenshots/update-check.png)
 
 ## 技术栈
 
@@ -121,8 +129,10 @@ cp .env.example .env          # Windows PowerShell: copy .env.example .env
 cp config/accounts.example.yml config/accounts.yml
 
 npm run setup              # 生成 Prisma Client、建表、写入演示数据
-npm run dev                # http://localhost:3000
+npm run dev                # http://localhost:3000/mboard
 ```
+
+服务挂在 `/mboard` 子路径下（由 `next.config.mjs` 的 `basePath` 决定），根路径 `/` 不是 MBoard 的页面。
 
 账号来自你本地的 `config/accounts.yml`（已被 `.gitignore` 忽略，不会进入仓库）。
 
@@ -143,7 +153,7 @@ cp config/accounts.example.yml config/accounts.yml
 echo "MBOARD_ROOT=$(pwd)" >> .env
 
 docker compose up -d --build
-# 打开 http://服务器IP:3000
+# 打开 http://服务器IP:3000/mboard
 ```
 
 - 数据库与上传文件：`./data`（挂载进容器 `/app/data`，备份这个目录即可）
@@ -256,3 +266,34 @@ node scripts/update-e2e.mjs                      # 更新流程端到端验证�
 ```
 
 > 更新相关的两个脚本只读写 `data/update` 目录，不会碰真实代码与容器，可以随便跑。
+
+## 参与贡献
+
+欢迎提 issue 和 PR，动手前请先读 [贡献指南](CONTRIBUTING.md)，里面写了环境准备、代码约定和提交信息规范。
+
+安全问题请不要开公开 issue，走仓库 **Security → Advisories → Report a vulnerability**，详见 [安全策略](SECURITY.md)。
+
+## 许可证
+
+本项目以 [MIT 许可证](LICENSE) 开源，可自由商用、修改、分发，保留版权声明即可。
+
+第三方组件的完整清单、版本与署名要求见 [NOTICE](NOTICE)。几个值得单独说明的：
+
+| 组件 | 许可证 | 说明 |
+| --- | --- | --- |
+| Excalidraw | MIT | 画布内核，经 npm 打进前端产物 |
+| Vditor、KaTeX、Mermaid、abcjs、markmap | MIT | 编辑器与图表能力 |
+| highlight.js | BSD-3-Clause | 代码高亮 |
+| Apache ECharts、MathJax | Apache-2.0 | 图表与公式渲染 |
+| **Graphviz**（经 Viz.js 打包） | **EPL-1.0** | 仅在浏览器端以目标码形式分发，源码获取途径见 NOTICE |
+| **libvips**（经 sharp 引入） | **LGPL-3.0-or-later** | 仅存在于 Docker 镜像中，以动态库形式加载，未静态链接 |
+| Prisma | Apache-2.0 | 服务端依赖 |
+| caniuse-lite | CC-BY-4.0 | 浏览器兼容性数据，需署名 |
+
+`public/vditor` 由 `scripts/copy-vditor.mjs` 在 `predev` / `prebuild` 阶段从 `node_modules` 复制而来，**不入库**。目录里只有 highlight.js 与 MathJax 会自然带上各自的许可证文本，其余组件以 [NOTICE](NOTICE) 和各依赖包内的许可证为准。
+
+### 商标声明
+
+Trello、AFFiNE、Notion、Excalidraw 等名称是各自所有者的商标。本项目与上述产品没有隶属或合作关系，文档中提到这些名称只为说明功能形态与致谢，不构成任何官方授权、认可或背书。
+
+看板、无限画布、实时协作、自动更新等具体实现与接口约定见 [`docs/`](docs/) 目录。

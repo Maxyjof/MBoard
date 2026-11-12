@@ -24,8 +24,8 @@ if (!chromePath) {
 
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000/mboard";
 const outputDir = process.argv[2] ? path.resolve(process.argv[2]) : path.join(process.cwd(), "data", "screenshots");
-const loginUser = process.env.MB_USER || "maxy";
-const loginPass = process.env.MB_PASS || "123456";
+const loginUser = process.env.MB_USER || "admin";
+const loginPass = process.env.MB_PASS || "change-me";
 const port = 9334;
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mb-update-"));
 

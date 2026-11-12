@@ -1,0 +1,75 @@
+name: Bug 报告
+description: 提交一个可复现的问题
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先搜索现有 issue，避免重复。
+
+        如果是安全漏洞，请不要用公开 issue，改用仓库 Security 标签页的私密报告。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象描述
+      description: 实际发生了什么，和你的预期有什么不同
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 按顺序写清楚，最好能稳定复现
+      placeholder: |
+        1. 打开 ...
+        2. 点击 ...
+        3. 看到 ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及模块
+      options:
+        - 看板
+        - 无限画布
+        - 文档与文件
+        - 实时协作
+        - 账号与权限
+        - 自动更新
+        - Docker 部署
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+      description: 例如 main 分支的某个提交哈希
+    validations:
+      required: false
+
+  - type: textarea
+    id: env
+    attributes:
+      label: 运行环境
+      description: 本地开发还是 Docker、浏览器版本、Node 版本
+      placeholder: |
+        - 运行方式：npm run dev / docker compose
+        - 浏览器：Chrome 130
+        - Node：22.11.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 浏览器控制台、服务端日志、页面截图都可以贴在这里
+      render: shell
+    validations:
+      required: false

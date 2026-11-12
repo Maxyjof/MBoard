@@ -17,8 +17,8 @@ if (!CHROME) {
 
 const canvasId = process.argv[2];
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000";
-const loginUser = process.env.MB_USER || "maxy";
-const loginPass = process.env.MB_PASS || "123456";
+const loginUser = process.env.MB_USER || "admin";
+const loginPass = process.env.MB_PASS || "change-me";
 const debugPort = 9334;
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "mb-e2e-"));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -1,8 +1,8 @@
 // 开发态预热：登录后把主要路由先访问一遍，触发 Next dev 的按需编译
 // 用法：先 npm run dev，另开终端执行 npm run warm
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000";
-const username = process.env.MB_USER || "maxy";
-const password = process.env.MB_PASS || "123456";
+const username = process.env.MB_USER || "admin";
+const password = process.env.MB_PASS || "change-me";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

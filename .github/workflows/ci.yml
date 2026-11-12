@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支的新提交取消上一轮未完成的构建
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # 构建期只做静态检查，用临时 SQLite 文件即可，不包含任何真实凭据
+      DATABASE_URL: "file:../data/ci.db"
+      AUTH_SECRET: "ci-only-not-a-real-secret-0123456789abcdef"
+      ACCOUNTS_FILE: "./config/accounts.example.yml"
+      UPLOAD_DIR: "./data/uploads"
+      APP_NAME: "MBoard"
+      SESSION_DAYS: "7"
+      COOKIE_SECURE: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare data dir
+        run: mkdir -p data
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

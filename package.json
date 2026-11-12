@@ -3,6 +3,25 @@
   "version": "1.0.0",
   "private": true,
   "description": "MBoard - 共享协作工作台（Trello 式看板 + AFFiNE 式无限画布，支持多人实时协作）",
+  "license": "MIT",
+  "author": "Maxyjof",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Maxyjof/MBoard.git"
+  },
+  "homepage": "https://github.com/Maxyjof/MBoard#readme",
+  "bugs": {
+    "url": "https://github.com/Maxyjof/MBoard/issues"
+  },
+  "keywords": [
+    "kanban",
+    "canvas",
+    "excalidraw",
+    "yjs",
+    "nextjs",
+    "collaboration",
+    "self-hosted"
+  ],
   "engines": {
     "node": ">=20"
   },

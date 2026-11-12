@@ -91,7 +91,7 @@ export function LoginScreen({ nextPath, appName }: LoginScreenProps) {
         <div className="relative z-10 px-12">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-line bg-surface/70 px-3 py-1 text-[11.5px] text-muted backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-brand" />
-            Trello 的秩序，AFFiNE 的自由
+            看板的秩序，画布的自由
           </div>
           <h1 className="max-w-xl text-[34px] font-semibold leading-[1.25] tracking-tight text-ink">
             把计划与灵感

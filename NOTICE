@@ -1,0 +1,98 @@
+# NOTICES
+
+MBoard
+Copyright (c) 2026 Maxyjof
+Licensed under the MIT License. See [LICENSE](LICENSE).
+
+本文件列出 MBoard 分发或依赖的第三方组件及其许可证。完整版本信息见
+`package.json` 与 `package-lock.json`，各依赖包内均保留原始许可证文本。
+
+---
+
+## 一、随源码分发的 npm 依赖
+
+### MIT / ISC / BSD 系
+
+- Next.js — Copyright (c) Vercel, Inc. — MIT
+- React、React DOM — Copyright (c) Meta Platforms, Inc. and affiliates. — MIT
+- Excalidraw — Copyright (c) Excalidraw — MIT
+- Vditor — Copyright (c) 2019 B3log 开源, b3log.org — MIT
+- CodeMirror 及 Lezer — Copyright (C) 2018-2021 by Marijn Haverbeke and others — MIT
+- Yjs、lib0、y-protocols — Copyright (c) Kevin Jahns — MIT
+- sonner — Copyright (c) 2023 Emil Kowalski — MIT
+- jose — Copyright (c) 2018 Filip Skokan — MIT
+- zod — Copyright (c) Colin McDonnell — MIT
+- react-markdown — Copyright (c) Espen Hovlandsdal — MIT
+- remark-gfm — Copyright (c) Titus Wormer — MIT
+- clsx — Copyright (c) Luke Edwards — MIT
+- tailwind-merge — Copyright (c) Dany Castillo — MIT
+- @dnd-kit — Copyright (c) Claudéric Demers — MIT
+- ws — Copyright (c) 2011 Einar Otto Stangvik, 2013 Arnout Kazemier, 2016 Luigi Pinca and contributors — MIT
+- lucide-react — Copyright (c) Lucide Icons and Contributors — ISC
+- yaml — Copyright Eemeli Aro — ISC
+- bcryptjs — Copyright (c) 2012 Nevins Bartolomeo and contributors — BSD-3-Clause
+
+### Apache-2.0
+
+- Prisma（`@prisma/client`、`prisma` 及 `@prisma/*` 子包）— Copyright Prisma Data, Inc. — Apache-2.0
+- dompurify — 双许可 MPL-2.0 OR Apache-2.0，本项目按 Apache-2.0 使用
+- TypeScript — Copyright Microsoft Corporation — Apache-2.0（仅构建期使用，不随运行时产物分发）
+
+### 数据
+
+- caniuse-lite — 浏览器兼容性数据，来自 https://caniuse.com — CC-BY-4.0
+
+---
+
+## 二、运行时静态资源
+
+`public/vditor/` 由 `scripts/copy-vditor.mjs` 在 `npm run dev` / `npm run build` 前从
+`node_modules/vditor` 复制生成，**不纳入版本控制**。其中包含：
+
+| 组件 | 许可证 | 版权 |
+| --- | --- | --- |
+| Vditor | MIT | Copyright (c) 2019 B3log 开源, b3log.org |
+| Lute | MIT | Copyright (c) 2019 B3log 开源 |
+| KaTeX（含字体） | MIT | Copyright (c) 2013-2020 Khan Academy and other contributors |
+| MathJax | Apache-2.0 | Copyright The MathJax Consortium |
+| mermaid | MIT | Copyright (c) Knut Sveidqvist and contributors |
+| highlight.js | BSD-3-Clause | Copyright (c) 2006-2022 highlight.js contributors |
+| Apache ECharts、zrender | Apache-2.0 | Copyright the Apache Software Foundation |
+| abcjs | MIT | Copyright (c) 2009-2019 Paul Rosen and Gregory Dyke |
+| markmap | MIT | Copyright markmap contributors |
+| d3 | ISC | Copyright 2021 Mike Bostock |
+| flowchart.js | MIT | 见发行包 |
+| plantuml-encoder | MIT | 见发行包 |
+| smiles-drawer | MIT | 见发行包 |
+
+### Graphviz（经 Viz.js 打包）
+
+- Viz.js — Copyright (c) 2014-2018 Michael Daines — MIT
+- **Graphviz — Eclipse Public License v1.0** — http://www.graphviz.org
+  Graphviz 在本项目中以目标码形式随 `public/vditor/dist/js/graphviz/` 分发。
+  EPL-1.0 源码可从 https://gitlab.com/graphviz/graphviz 获取。
+- Expat — Copyright (c) 1998-2006 Thai Open Source Software Center Ltd, Clark Cooper,
+  and Expat maintainers — MIT
+- zlib — Copyright (C) 1995-2013 Jean-loup Gailly and Mark Adler — zlib license
+
+---
+
+## 三、容器镜像中分发的二进制组件
+
+### libvips（经 sharp 引入）
+
+- sharp — Copyright Lovell Fuller — Apache-2.0
+- `@img/sharp-*` 平台包（含 `libvips-42.dll` / `libvips-cpp-*.dll`）—
+  Apache-2.0 AND **LGPL-3.0-or-later**
+
+libvips 以动态库形式被加载，未与本项目代码静态链接。
+LGPL-3.0 全文：https://www.gnu.org/licenses/lgpl-3.0.html
+libvips 源码：https://github.com/libvips/libvips
+
+---
+
+## 四、说明
+
+- 第三方许可证文本在依赖包内保持原样，本项目不修改、不剥离。
+- 若你是使用者且需要某个组件的完整许可证文本，从对应 npm 包或上游仓库获取即可。
+- 本 NOTICE 不改变任何第三方组件自身的许可证条款。

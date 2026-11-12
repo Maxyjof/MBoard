@@ -18,12 +18,12 @@ if (!CHROME) {
 
 const canvasId = process.argv[2];
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3000";
-const userA = process.env.MB_USER_A || "maxy";
-const userB = process.env.MB_USER_B || "tannami";
-const passA = process.env.MB_PASS_A || "123456";
-const passB = process.env.MB_PASS_B || "123456";
-const expectA = process.env.EXPECT_A || "Maxy";
-const expectB = process.env.EXPECT_B || "Tannami";
+const userA = process.env.MB_USER_A || "admin";
+const userB = process.env.MB_USER_B || "user2";
+const passA = process.env.MB_PASS_A || "change-me";
+const passB = process.env.MB_PASS_B || "change-me";
+const expectA = process.env.EXPECT_A || "管理员";
+const expectB = process.env.EXPECT_B || "成员二";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const browsers = [];
@@ -205,20 +205,20 @@ try {
     "B sees A cursor"
   ).catch(() => false);
 
-  const maxyCursor = remoteForB.find((item) => item.username === expectA);
-  check("B 看到 A 的协作光标", Boolean(maxyCursor), JSON.stringify(maxyCursor || null));
+  const cursorFromA = remoteForB.find((item) => item.username === expectA);
+  check("B 看到 A 的协作光标", Boolean(cursorFromA), JSON.stringify(cursorFromA || null));
   check(
     "A 的光标带有用户名",
-    maxyCursor?.username === expectA,
-    maxyCursor?.username || "missing"
+    cursorFromA?.username === expectA,
+    cursorFromA?.username || "missing"
   );
   check(
     "光标坐标已同步",
-    Boolean(maxyCursor?.pointer && Number.isFinite(maxyCursor.pointer.x)),
-    JSON.stringify(maxyCursor?.pointer || null)
+    Boolean(cursorFromA?.pointer && Number.isFinite(cursorFromA.pointer.x)),
+    JSON.stringify(cursorFromA?.pointer || null)
   );
 
-  // B 移动鼠标，A 应该看到 Tannami
+  // B 移动鼠标，A 应该看到 成员二
   for (const [x, y] of [
     [760, 500],
     [800, 520],
@@ -252,7 +252,7 @@ try {
     JSON.stringify(remoteForA)
   );
 
-  // 截图 B，画面里应出现 Maxy 的光标与名字
+  // 截图 B，画面里应出现管理员的光标与名字
   const shot = await b.cdp.send("Page.captureScreenshot", { format: "png" });
   const output = path.join(process.cwd(), "data", "shot-cursor.png");
   fs.mkdirSync(path.dirname(output), { recursive: true });

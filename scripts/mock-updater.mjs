@@ -27,19 +27,19 @@ const COMMITS = [
   {
     sha: "9a7b210",
     subject: "feat(system): 主页一键检查更新与强制更新",
-    author: "Maxy",
+    author: "dev",
     date: "2025-11-01",
   },
   {
     sha: "5c4d3e2",
     subject: "fix(canvas): 组合卡片拖动时不再丢失焦点",
-    author: "Maxy",
+    author: "dev",
     date: "2025-10-31",
   },
   {
     sha: "1f0e9d8",
     subject: "chore: 更新依赖与构建脚本",
-    author: "Maxy",
+    author: "dev",
     date: "2025-10-30",
   },
 ];
