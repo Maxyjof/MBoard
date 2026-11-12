@@ -27,7 +27,7 @@ npm run dev                               # http://localhost:3000/mboard
 - 样式只用 Tailwind 和 `app/globals.css` 里的设计 token，不要写死颜色
 - 单个文件控制在 1000 行以内，超了就按职责拆分
 - 注释解释「为什么」，不复述「做了什么」
-- 新增接口或改动数据结构时，同步更新 [`docs/CONTRACT.md`](docs/CONTRACT.md)
+- 新增接口或改动数据结构时，同步更新本地 `docs/CONTRACT.md`（该目录不入库）
 
 ## 提交信息
 

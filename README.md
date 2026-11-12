@@ -10,7 +10,7 @@
 MBoard 是一个可以自己部署的小团队协作工作台：看板管任务，无限画布承载想法，Yjs 做实时同步，账号由一份 YAML 白名单控制。
 没有注册流程、没有多租户、没有云端依赖，`docker compose up` 就能跑在自己的服务器上。
 
-![登录页](docs/screenshots/login.png)
+![登录页](assets/screenshots/login.png)
 
 ## 功能特性
 
@@ -31,7 +31,7 @@ MBoard 是一个可以自己部署的小团队协作工作台：看板管任务�
 - 新增卡片后直接进入详情编辑
 - 看板重命名、描述、主题色、删除，空状态引导
 
-![看板页](docs/screenshots/boards.png)
+![看板页](assets/screenshots/boards.png)
 
 ### 负责人与我的任务（Notion 式）
 - 每张卡片可以分配一个或多个负责人，成员列表来自账号配置
@@ -39,9 +39,9 @@ MBoard 是一个可以自己部署的小团队协作工作台：看板管任务�
 - 任务行显示逾期状态，点击直接跳转到对应看板并自动打开卡片详情
 - 负责人变化后，对应的「我的任务」即时反映（刷新页面）
 
-![成员负责人与任务分配](docs/screenshots/assignees.png)
+![成员负责人与任务分配](assets/screenshots/assignees.png)
 
-![我的任务](docs/screenshots/my-tasks.png)
+![我的任务](assets/screenshots/my-tasks.png)
 
 ### 无限画布（AFFiNE 式）
 - 基于 Excalidraw 内核：无限坐标系、平移缩放、框选、撤销重做、旋转缩放、图层顺序、自由连线与锚点吸附
@@ -62,19 +62,19 @@ MBoard 是一个可以自己部署的小团队协作工作台：看板管任务�
 - 图片自动转存资源库并注入画布，避免场景 JSON 膨胀
 - 画板库支持缩略图、搜索、重命名、删除、复制链接
 
-![画布](docs/screenshots/canvas.png)
+![画布](assets/screenshots/canvas.png)
 
-![组合卡片](docs/screenshots/composite-card.png)
+![组合卡片](assets/screenshots/composite-card.png)
 
-![组合卡片编辑](docs/screenshots/composite-editor.png)
+![组合卡片编辑](assets/screenshots/composite-editor.png)
 
-![文档实时编辑](docs/screenshots/doc-editor.png)
+![文档实时编辑](assets/screenshots/doc-editor.png)
 
-![选中文档自动预览](docs/screenshots/doc-inline.png)
+![选中文档自动预览](assets/screenshots/doc-inline.png)
 
-![表格可视化编辑](docs/screenshots/table-editor.png)
+![表格可视化编辑](assets/screenshots/table-editor.png)
 
-![文件卡片](docs/screenshots/file-cards.png)
+![文件卡片](assets/screenshots/file-cards.png)
 
 ### 实时协作
 - 画布基于 **Yjs CRDT + WebSocket**，多人同时编辑自动合并，不会互相覆盖
@@ -82,11 +82,11 @@ MBoard 是一个可以自己部署的小团队协作工作台：看板管任务�
 - 服务端增量持久化到 SQLite，空闲房间自动卸载
 - 画布缩略图由客户端定时导出并上传，画板库实时可见
 
-![多人协作光标](docs/screenshots/cursor.png)
+![多人协作光标](assets/screenshots/cursor.png)
 
 | 看板（深色） | 画布（深色） |
 | --- | --- |
-| ![看板深色](docs/screenshots/boards-dark.png) | ![画布深色](docs/screenshots/canvas-dark.png) |
+| ![看板深色](assets/screenshots/boards-dark.png) | ![画布深色](assets/screenshots/canvas-dark.png) |
 
 ### 操作历史与撤销
 - 侧栏「操作记录」查看全站最近 30 天的内容变更，看板、列表、卡片、标签、附件、文档与画板资源都可撤销 / 重做
@@ -101,7 +101,7 @@ MBoard 是一个可以自己部署的小团队协作工作台：看板管任务�
 - 更新中可以在页面里展开实时构建日志，失败时也能直接看到原因
 - 执行者是独立的 `mboard-updater` 容器，应用容器不持有 docker 权限，也不碰 git
 
-![检查更新（截图为演示数据，提交记录由 mock 脚本生成）](docs/screenshots/update-check.png)
+![检查更新（截图为演示数据，提交记录由 mock 脚本生成）](assets/screenshots/update-check.png)
 
 ## 技术栈
 
@@ -159,8 +159,9 @@ docker compose up -d --build
 - 数据库与上传文件：`./data`（挂载进容器 `/app/data`，备份这个目录即可）
 - 账号配置：`./config/accounts.yml`（只读挂载，改完 `docker compose restart`）
 - 容器启动时自动执行 `prisma db push` 和幂等种子脚本
-- 更新服务的原理、协议与排错见 [自动更新文档](docs/UPDATE.md)
-- 反向代理、HTTPS、备份升级见 [部署文档](docs/DEPLOY.md)
+- 更新服务由独立的 `mboard-updater` 容器执行，协议与排错细节见本地 `docs/UPDATE.md`
+- 反向代理、HTTPS、备份升级见本地 `docs/DEPLOY.md`
+  （`docs/` 属于维护者本地文档，不随仓库发布）
 
 ## 账号配置
 
@@ -191,7 +192,7 @@ npm run hash -- "你的新密码"
 - **修改密码**：需要输入当前密码，新密码至少 6 位；修改结果写入数据库，覆盖配置文件里的初始密码，当前登录状态不受影响
 - 配置文件仍是账号白名单：删除账号后，即使数据库里还有个人设置也无法登录
 
-![账号设置](docs/screenshots/settings.png)
+![账号设置](assets/screenshots/settings.png)
 
 
 ## 常用脚本
@@ -234,16 +235,13 @@ MBoard/
 ├── config/accounts.yml     # 账号白名单
 ├── docker/                 # 容器入口脚本
 │   └── updater/            # 常驻更新容器（git + docker compose）
-├── docs/                   # 契约、架构、部署、截图
+├── assets/screenshots/     # README 配图
 └── server.mjs              # Next + 协作/系统 WebSocket 统一入口
 ```
 
-## 文档
+## 深入文档
 
-- [架构与协作机制](docs/ARCHITECTURE.md)
-- [Docker / 云服务器部署](docs/DEPLOY.md)
-- [开发契约与接口清单](docs/CONTRACT.md)
-- [自动更新机制与排错](docs/UPDATE.md)
+架构设计、接口契约、部署与自动更新的详细说明保留在本地 `docs/` 目录，属于维护者内部资料，不随仓库发布。仓库内的实现以源码与类型定义为准。
 
 ## 已知限制
 
@@ -296,4 +294,4 @@ node scripts/update-e2e.mjs                      # 更新流程端到端验证�
 
 Trello、AFFiNE、Notion、Excalidraw 等名称是各自所有者的商标。本项目与上述产品没有隶属或合作关系，文档中提到这些名称只为说明功能形态与致谢，不构成任何官方授权、认可或背书。
 
-看板、无限画布、实时协作、自动更新等具体实现与接口约定见 [`docs/`](docs/) 目录。
+看板、无限画布、实时协作、自动更新的具体实现见源码，接口约定写在代码与类型定义里。

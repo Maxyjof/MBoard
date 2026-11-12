@@ -22,6 +22,9 @@ uploads/
 # vditor 静态资源由 scripts/copy-vditor.mjs 从 node_modules 复制，不提交
 public/vditor/
 
+# 维护者本地文档（架构、契约、部署、更新说明），不随仓库发布
+docs/
+
 # 私有配置与密钥（.env.example 是模板，需要提交）
 .env
 .env.*
